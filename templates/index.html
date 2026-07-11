@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Albums</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    // Thema meteen zetten, voor de eerste render, om flitsen te voorkomen
+    (function () {
+      var saved = localStorage.getItem("album-theme");
+      document.documentElement.setAttribute("data-theme", saved === "light" ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand" data-nav="">
+      <span class="brand-mark">◍</span>
+      <span class="brand-name">ALBUMS</span>
+    </div>
+    <button class="back-btn" id="back-btn" aria-label="Terug naar vorige map" hidden>‹ Terug</button>
+    <nav class="breadcrumbs" id="breadcrumbs" aria-label="Broodkruimelpad"></nav>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="favorites-btn" title="Favorieten" aria-label="Favorieten">♥</button>
+      <button class="icon-btn" id="theme-btn" title="Wissel thema" aria-label="Wissel tussen licht en donker">◐</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="grid" id="grid"></div>
+    <div class="empty-state" id="empty-state" hidden>
+      <p class="empty-title" id="empty-title">Niets te zien hier</p>
+      <p class="empty-sub" id="empty-sub">Deze map bevat geen submappen of foto's.</p>
+    </div>
+  </main>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lb-close" id="lb-close" aria-label="Sluiten">&times;</button>
+    <button class="lb-nav lb-prev" id="lb-prev" aria-label="Vorige">&#8249;</button>
+    <img class="lb-image" id="lb-image" alt="" />
+    <button class="lb-nav lb-next" id="lb-next" aria-label="Volgende">&#8250;</button>
+
+    <div class="lb-toolbar">
+      <button class="icon-btn lb-fav" id="lb-fav-btn" aria-label="Favoriet">♥</button>
+      <button class="icon-btn" id="lb-info-btn" aria-label="Foto-informatie">ⓘ</button>
+    </div>
+
+    <div class="lb-counter" id="lb-counter"></div>
+
+    <aside class="info-panel" id="info-panel" hidden>
+      <button class="info-close" id="info-close" aria-label="Sluit informatiepaneel">&times;</button>
+      <h2 class="info-title" id="info-filename"></h2>
+      <dl class="info-list" id="info-list"></dl>
+      <div class="info-map" id="info-map" hidden></div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

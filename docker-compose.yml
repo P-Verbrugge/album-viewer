@@ -1,0 +1,19 @@
+services:
+  album-viewer:
+    build: .
+    container_name: album-viewer
+    ports:
+      - "8080:8080"
+    volumes:
+      # Pas het linkerpad aan naar de map met jouw foto's op het host-systeem.
+      - /pad/naar/jouw/fotos:/photos:ro
+      # Thumbnail-cache blijft bewaard tussen herstarts.
+      - album-viewer-cache:/cache
+    environment:
+      - PHOTOS_ROOT=/photos
+      - CACHE_DIR=/cache
+      - THUMB_SIZE=400
+    restart: unless-stopped
+
+volumes:
+  album-viewer-cache:

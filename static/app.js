@@ -1,0 +1,424 @@
+(function () {
+  const FAVORITES_PATH = "__favorites__";
+
+  const grid = document.getElementById("grid");
+  const emptyState = document.getElementById("empty-state");
+  const emptyTitle = document.getElementById("empty-title");
+  const emptySub = document.getElementById("empty-sub");
+  const breadcrumbsEl = document.getElementById("breadcrumbs");
+  const brand = document.querySelector(".brand");
+  const backBtn = document.getElementById("back-btn");
+  const toast = document.getElementById("toast");
+
+  const themeBtn = document.getElementById("theme-btn");
+  const favoritesBtn = document.getElementById("favorites-btn");
+
+  const lightbox = document.getElementById("lightbox");
+  const lbImage = document.getElementById("lb-image");
+  const lbCounter = document.getElementById("lb-counter");
+  const lbClose = document.getElementById("lb-close");
+  const lbPrev = document.getElementById("lb-prev");
+  const lbNext = document.getElementById("lb-next");
+  const lbFavBtn = document.getElementById("lb-fav-btn");
+  const lbInfoBtn = document.getElementById("lb-info-btn");
+
+  const infoPanel = document.getElementById("info-panel");
+  const infoClose = document.getElementById("info-close");
+  const infoFilename = document.getElementById("info-filename");
+  const infoList = document.getElementById("info-list");
+  const infoMapEl = document.getElementById("info-map");
+
+  let currentPhotos = [];
+  let currentPhotoIndex = 0;
+  let leafletMap = null;
+  let leafletMarker = null;
+
+  // ---------------- Thema ----------------
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("album-theme", theme);
+    themeBtn.textContent = theme === "light" ? "☀" : "◐";
+  }
+
+  themeBtn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    applyTheme(current === "light" ? "dark" : "light");
+  });
+  applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
+
+  favoritesBtn.addEventListener("click", () => loadPath(FAVORITES_PATH));
+
+  // ---------------- Navigatie ----------------
+
+  function pathFromLocation() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("path") || "";
+  }
+
+  async function loadPath(path, pushState = true) {
+    const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+    if (!res.ok) {
+      grid.innerHTML = "";
+      showEmpty("Niets gevonden", "Deze locatie bestaat niet (meer).");
+      return;
+    }
+    const data = await res.json();
+
+    if (pushState) {
+      const url = data.path ? `?path=${encodeURIComponent(data.path)}` : window.location.pathname;
+      history.pushState({ path: data.path }, "", url);
+    }
+
+    renderBreadcrumbs(data.breadcrumbs, data.path === FAVORITES_PATH);
+    updateBackButton(data);
+    render(data);
+  }
+
+  function updateBackButton(data) {
+    if (data.path === FAVORITES_PATH) {
+      backBtn.hidden = false;
+      backBtn.onclick = () => loadPath("");
+      return;
+    }
+    if (!data.breadcrumbs || data.breadcrumbs.length === 0) {
+      // We staan al op het hoofdoverzicht, niets om naar terug te gaan.
+      backBtn.hidden = true;
+      backBtn.onclick = null;
+      return;
+    }
+    const parentPath =
+      data.breadcrumbs.length >= 2 ? data.breadcrumbs[data.breadcrumbs.length - 2].path : "";
+    backBtn.hidden = false;
+    backBtn.onclick = () => loadPath(parentPath);
+  }
+
+  function renderBreadcrumbs(crumbs, isFavorites) {
+    breadcrumbsEl.innerHTML = "";
+    crumbs.forEach((c, i) => {
+      const sep = document.createElement("span");
+      sep.className = "crumb-sep";
+      sep.textContent = "•";
+      breadcrumbsEl.appendChild(sep);
+
+      const el = document.createElement("span");
+      el.className = "crumb" + (i === crumbs.length - 1 ? " current" : "");
+      el.textContent = c.name;
+      if (!isFavorites) {
+        el.addEventListener("click", () => loadPath(c.path));
+      }
+      breadcrumbsEl.appendChild(el);
+    });
+  }
+
+  function showEmpty(title, sub) {
+    emptyTitle.textContent = title;
+    emptySub.textContent = sub;
+    emptyState.hidden = false;
+  }
+
+  function render(data) {
+    grid.innerHTML = "";
+    emptyState.hidden = true;
+    currentPhotos = [];
+
+    if (data.type === "folders") {
+      data.items.forEach((item) => grid.appendChild(folderTile(item)));
+    } else if (data.type === "photos") {
+      currentPhotos = data.items;
+      if (data.items.length === 0 && data.path === FAVORITES_PATH) {
+        showEmpty("Nog geen favorieten", "Klik op het hartje bij een foto om 'm hier te laten verschijnen.");
+      } else {
+        data.items.forEach((item, i) => grid.appendChild(photoTile(item, i)));
+      }
+    } else {
+      showEmpty("Niets te zien hier", "Deze map bevat geen submappen of foto's.");
+    }
+  }
+
+  function folderTile(item) {
+    const tile = document.createElement("div");
+    tile.className = "tile folder";
+    tile.tabIndex = 0;
+
+    if (item.cover) {
+      const img = document.createElement("img");
+      img.src = `/api/thumbnail?path=${encodeURIComponent(item.cover)}`;
+      img.loading = "lazy";
+      img.alt = item.name;
+      tile.appendChild(img);
+    } else {
+      const placeholder = document.createElement("div");
+      placeholder.className = "cover-placeholder";
+      placeholder.textContent = "◍";
+      tile.appendChild(placeholder);
+    }
+
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = item.name;
+    tile.appendChild(label);
+
+    const open = () => loadPath(item.path);
+    tile.addEventListener("click", open);
+    tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") open();
+    });
+
+    return tile;
+  }
+
+  function photoTile(item, index) {
+    const tile = document.createElement("div");
+    tile.className = "tile photo";
+    tile.tabIndex = 0;
+    tile.dataset.path = item.path;
+
+    const img = document.createElement("img");
+    img.src = `/api/thumbnail?path=${encodeURIComponent(item.path)}`;
+    img.loading = "lazy";
+    img.alt = item.name;
+    tile.appendChild(img);
+
+    const favBtn = document.createElement("button");
+    favBtn.className = "tile-fav-btn" + (item.favorite ? " active" : "");
+    favBtn.textContent = item.favorite ? "♥" : "♡";
+    favBtn.setAttribute("aria-label", "Favoriet");
+    favBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFavorite(item.path, favBtn);
+    });
+    tile.appendChild(favBtn);
+
+    const open = () => openLightbox(index);
+    tile.addEventListener("click", open);
+    tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") open();
+    });
+
+    return tile;
+  }
+
+  async function toggleFavorite(path, buttonEl) {
+    const res = await fetch("/api/favorites/toggle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) {
+      showToast("Kon favoriet niet opslaan — probeer opnieuw.");
+      return;
+    }
+    const data = await res.json();
+
+    // Update alle knoppen die naar deze foto verwijzen (grid + eventueel lightbox)
+    document.querySelectorAll(`[data-path="${CSS.escape(path)}"] .tile-fav-btn`).forEach((btn) => {
+      setFavButtonState(btn, data.favorite);
+    });
+    if (buttonEl) setFavButtonState(buttonEl, data.favorite);
+    setFavButtonState(lbFavBtn, currentPhotos[currentPhotoIndex] && currentPhotos[currentPhotoIndex].path === path ? data.favorite : lbFavBtn.classList.contains("active"));
+
+    const item = currentPhotos.find((p) => p.path === path);
+    if (item) item.favorite = data.favorite;
+
+    showToast(data.favorite ? "Toegevoegd aan favorieten" : "Verwijderd uit favorieten", data.favorite);
+
+    // Als we in het favorieten-overzicht zitten en een foto wordt "ontfavoriet",
+    // laat 'm meteen verdwijnen.
+    if (!data.favorite && pathFromLocation() === FAVORITES_PATH) {
+      loadPath(FAVORITES_PATH, false);
+    }
+  }
+
+  function setFavButtonState(btn, isFavorite) {
+    if (!btn) return;
+    btn.classList.toggle("active", isFavorite);
+    // Alleen het hartje in de tegels heeft een los ♡/♥-symbool; de knop in de
+    // viewer (lb-fav) blijft altijd hetzelfde glyph en verandert enkel van kleur.
+    if (btn.classList.contains("tile-fav-btn")) {
+      btn.textContent = isFavorite ? "♥" : "♡";
+    }
+    btn.classList.remove("pulse");
+    // Forceer een reflow zodat de animatie ook werkt bij snel achter elkaar klikken.
+    void btn.offsetWidth;
+    btn.classList.add("pulse");
+  }
+
+  let toastTimer = null;
+  function showToast(message, isFavorite) {
+    clearTimeout(toastTimer);
+    toast.innerHTML = "";
+    if (isFavorite === true) {
+      const heart = document.createElement("span");
+      heart.className = "toast-heart";
+      heart.textContent = "♥";
+      toast.appendChild(heart);
+    }
+    toast.appendChild(document.createTextNode(message));
+    toast.hidden = false;
+    toast.classList.remove("hide");
+    toastTimer = setTimeout(() => {
+      toast.classList.add("hide");
+      setTimeout(() => {
+        toast.hidden = true;
+      }, 250);
+    }, 1800);
+  }
+
+  // ---------------- Lightbox ----------------
+
+  function openLightbox(index) {
+    currentPhotoIndex = index;
+    showCurrentPhoto();
+    lightbox.hidden = false;
+  }
+
+  function showCurrentPhoto() {
+    const photo = currentPhotos[currentPhotoIndex];
+    lbImage.src = `/api/image?path=${encodeURIComponent(photo.path)}`;
+    lbImage.alt = photo.name;
+    lbCounter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
+    lbFavBtn.classList.toggle("active", !!photo.favorite);
+
+    if (!infoPanel.hidden) {
+      loadExifInto(photo.path);
+    }
+  }
+
+  function closeLightbox() {
+    lightbox.hidden = true;
+    lbImage.src = "";
+    infoPanel.hidden = true;
+  }
+
+  function showNext() {
+    currentPhotoIndex = (currentPhotoIndex + 1) % currentPhotos.length;
+    showCurrentPhoto();
+  }
+
+  function showPrev() {
+    currentPhotoIndex = (currentPhotoIndex - 1 + currentPhotos.length) % currentPhotos.length;
+    showCurrentPhoto();
+  }
+
+  lbClose.addEventListener("click", closeLightbox);
+  lbNext.addEventListener("click", showNext);
+  lbPrev.addEventListener("click", showPrev);
+  lightbox.addEventListener("click", (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+
+  lbFavBtn.addEventListener("click", () => {
+    const photo = currentPhotos[currentPhotoIndex];
+    if (photo) toggleFavorite(photo.path, null);
+  });
+
+  lbInfoBtn.addEventListener("click", () => {
+    const photo = currentPhotos[currentPhotoIndex];
+    if (!photo) return;
+    if (infoPanel.hidden) {
+      infoPanel.hidden = false;
+      loadExifInto(photo.path);
+    } else {
+      infoPanel.hidden = true;
+    }
+  });
+
+  infoClose.addEventListener("click", () => {
+    infoPanel.hidden = true;
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (lightbox.hidden) return;
+    if (e.key === "Escape") {
+      if (!infoPanel.hidden) {
+        infoPanel.hidden = true;
+      } else {
+        closeLightbox();
+      }
+    }
+    if (e.key === "ArrowRight") showNext();
+    if (e.key === "ArrowLeft") showPrev();
+  });
+
+  // ---------------- EXIF / info-paneel ----------------
+
+  const EXIF_LABELS = [
+    ["camera", "Camera"],
+    ["lens", "Lens"],
+    ["date_taken", "Datum"],
+    ["exposure", "Sluitertijd"],
+    ["fnumber", "Diafragma"],
+    ["iso", "ISO"],
+    ["focal_length", "Brandpuntsafstand"],
+  ];
+
+  async function loadExifInto(path) {
+    infoFilename.textContent = "Laden...";
+    infoList.innerHTML = "";
+    infoMapEl.hidden = true;
+
+    const res = await fetch(`/api/exif?path=${encodeURIComponent(path)}`);
+    if (!res.ok) {
+      infoFilename.textContent = path.split("/").pop();
+      return;
+    }
+    const data = await res.json();
+
+    infoFilename.textContent = data.filename;
+
+    if (data.width && data.height) {
+      addInfoRow("Afmetingen", `${data.width} × ${data.height}px`);
+    }
+    EXIF_LABELS.forEach(([key, label]) => {
+      if (data[key]) addInfoRow(label, data[key]);
+    });
+    if (!infoList.children.length) {
+      addInfoRow("Metadata", "Geen EXIF-gegevens gevonden in dit bestand.");
+    }
+
+    if (data.gps && typeof data.gps.lat === "number") {
+      infoMapEl.hidden = false;
+      showOnMap(data.gps.lat, data.gps.lon);
+    }
+  }
+
+  function addInfoRow(label, value) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    infoList.appendChild(dt);
+    infoList.appendChild(dd);
+  }
+
+  function showOnMap(lat, lon) {
+    if (typeof L === "undefined") return;
+
+    if (!leafletMap) {
+      leafletMap = L.map(infoMapEl).setView([lat, lon], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(leafletMap);
+      leafletMarker = L.marker([lat, lon]).addTo(leafletMap);
+    } else {
+      leafletMap.setView([lat, lon], 13);
+      leafletMarker.setLatLng([lat, lon]);
+    }
+    // De kaart-container was tot net verborgen (display:none), dus Leaflet
+    // moet z'n afmetingen opnieuw berekenen zodra hij zichtbaar wordt.
+    setTimeout(() => leafletMap.invalidateSize(), 50);
+  }
+
+  // ---------------- Init ----------------
+
+  brand.addEventListener("click", () => loadPath(""));
+
+  window.addEventListener("popstate", (e) => {
+    const path = (e.state && e.state.path) || "";
+    loadPath(path, false);
+  });
+
+  loadPath(pathFromLocation(), false);
+})();
