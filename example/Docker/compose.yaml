@@ -1,0 +1,19 @@
+services:
+  album-viewer:
+    build:
+      context: https://github.com/p-verbrugge/album-viewer.git#main
+      dockerfile: Dockerfile
+    container_name: album-viewer
+    ports:
+      - "32100:8080"
+    volumes:
+      - /mnt/storage/Pictures:/photos:ro
+      - /mnt/storage/Configs/Album-viewer/Cache:/cache
+    environment:
+      - PHOTOS_ROOT=/photos
+      - CACHE_DIR=/cache
+      - THUMB_SIZE=400
+    restart: unless-stopped
+
+volumes:
+  album-viewer-cache:
