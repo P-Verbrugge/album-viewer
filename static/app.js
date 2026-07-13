@@ -12,6 +12,15 @@
 
   const themeBtn = document.getElementById("theme-btn");
   const favoritesBtn = document.getElementById("favorites-btn");
+  const settingsBtn = document.getElementById("settings-btn");
+  const settingsModal = document.getElementById("settings-modal");
+  const settingsClose = document.getElementById("settings-close");
+  const cacheInfoText = document.getElementById("cache-info-text");
+  const cacheProgressWrap = document.getElementById("cache-progress-wrap");
+  const cacheProgressFill = document.getElementById("cache-progress-fill");
+  const cacheProgressLabel = document.getElementById("cache-progress-label");
+  const cacheBuildBtn = document.getElementById("cache-build-btn");
+  const cacheClearBtn = document.getElementById("cache-clear-btn");
 
   const lightbox = document.getElementById("lightbox");
   const lbImage = document.getElementById("lb-image");
@@ -329,6 +338,10 @@
   });
 
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !settingsModal.hidden) {
+      closeSettings();
+      return;
+    }
     if (lightbox.hidden) return;
     if (e.key === "Escape") {
       if (!infoPanel.hidden) {
@@ -410,6 +423,119 @@
     // moet z'n afmetingen opnieuw berekenen zodra hij zichtbaar wordt.
     setTimeout(() => leafletMap.invalidateSize(), 50);
   }
+
+  // ---------------- Instellingen / bulk-cache ----------------
+
+  let cachePollTimer = null;
+
+  function formatBytes(bytes) {
+    if (!bytes) return "0 MB";
+    const mb = bytes / (1024 * 1024);
+    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+    return `${(mb / 1024).toFixed(2)} GB`;
+  }
+
+  async function refreshCacheInfo() {
+    try {
+      const res = await fetch("/api/cache/info");
+      if (!res.ok) throw new Error("info failed");
+      const data = await res.json();
+      cacheInfoText.textContent =
+        `${data.cached_files} van de ${data.total_images} foto's hebben al een thumbnail ` +
+        `(${formatBytes(data.cache_size_bytes)} cache).`;
+    } catch {
+      cacheInfoText.textContent = "Kon cache-informatie niet ophalen.";
+    }
+  }
+
+  function renderCacheStatus(status) {
+    if (status.status === "running") {
+      cacheProgressWrap.hidden = false;
+      const pct = status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
+      cacheProgressFill.style.width = `${pct}%`;
+      cacheProgressLabel.textContent = status.message
+        ? status.message
+        : `${status.processed} / ${status.total} foto's verwerkt`;
+      cacheBuildBtn.disabled = true;
+      cacheClearBtn.disabled = true;
+    } else {
+      cacheBuildBtn.disabled = false;
+      cacheClearBtn.disabled = false;
+      if (status.status === "done" && status.processed > 0) {
+        cacheProgressWrap.hidden = false;
+        cacheProgressFill.style.width = "100%";
+        const skippedText = status.skipped ? ` (${status.skipped} overgeslagen)` : "";
+        cacheProgressLabel.textContent = `Klaar — ${status.processed} foto's verwerkt${skippedText}.`;
+      } else if (status.status === "error") {
+        cacheProgressWrap.hidden = false;
+        cacheProgressLabel.textContent = `Er ging iets mis: ${status.message || "onbekende fout"}`;
+      } else {
+        cacheProgressWrap.hidden = true;
+      }
+    }
+  }
+
+  async function pollCacheStatus() {
+    try {
+      const res = await fetch("/api/cache/status");
+      const status = await res.json();
+      renderCacheStatus(status);
+      if (status.status === "running") {
+        cachePollTimer = setTimeout(pollCacheStatus, 1000);
+      } else {
+        clearTimeout(cachePollTimer);
+        refreshCacheInfo();
+      }
+    } catch {
+      clearTimeout(cachePollTimer);
+    }
+  }
+
+  async function openSettings() {
+    settingsModal.hidden = false;
+    refreshCacheInfo();
+    const res = await fetch("/api/cache/status");
+    const status = await res.json();
+    renderCacheStatus(status);
+    if (status.status === "running") {
+      clearTimeout(cachePollTimer);
+      pollCacheStatus();
+    }
+  }
+
+  function closeSettings() {
+    settingsModal.hidden = true;
+    clearTimeout(cachePollTimer);
+  }
+
+  settingsBtn.addEventListener("click", openSettings);
+  settingsClose.addEventListener("click", closeSettings);
+  settingsModal.addEventListener("click", (e) => {
+    if (e.target === settingsModal) closeSettings();
+  });
+
+  cacheBuildBtn.addEventListener("click", async () => {
+    cacheBuildBtn.disabled = true;
+    cacheClearBtn.disabled = true;
+    await fetch("/api/cache/start", { method: "POST" });
+    clearTimeout(cachePollTimer);
+    pollCacheStatus();
+  });
+
+  cacheClearBtn.addEventListener("click", async () => {
+    if (!confirm("Weet je zeker dat je de cache wilt legen? Thumbnails worden opnieuw aangemaakt zodra je een foto bekijkt.")) {
+      return;
+    }
+    cacheClearBtn.disabled = true;
+    try {
+      await fetch("/api/cache/clear", { method: "POST" });
+      cacheProgressWrap.hidden = true;
+      await refreshCacheInfo();
+      showToast("Cache geleegd");
+    } finally {
+      cacheClearBtn.disabled = false;
+    }
+  });
 
   // ---------------- Init ----------------
 

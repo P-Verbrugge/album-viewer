@@ -47,6 +47,14 @@ volgens deze logica alleen de submappen getoond (de losse foto's in die map
 blijven dan onzichtbaar, tenzij je ze in een submap zet). Laat het weten als
 je liever hebt dat beide tegelijk getoond worden — dat is een kleine aanpassing.
 
+- **Instellingen** (⚙-icoon rechtsboven): laat zien hoeveel foto's al een
+  thumbnail hebben en hoeveel ruimte de cache inneemt. Met **"Cache nu
+  volledig aanmaken"** worden alle foto's in de bibliotheek in één keer
+  verwerkt (met een voortgangsbalk), zodat je nooit meer hoeft te wachten
+  tijdens het bladeren. Met **"Cache legen"** verwijder je alle gegenereerde
+  thumbnails weer (bijv. als je opnieuw wilt beginnen na veel wijzigingen in
+  je fotomap) — je favorieten blijven daarbij gewoon bewaard.
+
 ## Nieuwe features
 
 - **Licht/donker thema**: knop rechtsboven (◐). Voorkeur wordt onthouden in je
@@ -63,6 +71,48 @@ je liever hebt dat beide tegelijk getoond worden — dat is een kleine aanpassin
   ook een kaartje (via OpenStreetMap). Let op: voor het kaartje moet de browser
   van de kijker internettoegang hebben (de kaarttegels komen van
   openstreetmap.org) — de server zelf hoeft niets extra's te doen.
+
+## Bouwen vanaf GitHub (geen handmatige bestandskopieën meer)
+
+Je kunt Docker de code rechtstreeks van GitHub laten ophalen bij het bouwen,
+in plaats van bestanden handmatig naar je TrueNAS-server te kopiëren.
+
+1. Zet de projectmap in een eigen GitHub-repository (zie `.gitignore`).
+2. Zet in `docker-compose.yml` de `build:`-sectie op Optie B (zie de
+   commentaarregels in dat bestand) en vul je eigen GitHub-URL in.
+3. Op TrueNAS heb je dan alleen nog `docker-compose.yml` nodig — plaats dat
+   ene bestand in bijv. `/mnt/JePool/apps/photo-album-app/` en run:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+   Docker kloont de repo intern (via BuildKit) en bouwt de image — je hoeft
+   zelf nooit `git clone` te draaien.
+
+### Updaten na een codewijziging
+
+```bash
+git add . && git commit -m "wijziging" && git push     # op je eigen PC
+```
+En dan op TrueNAS:
+```bash
+docker compose up -d --build
+```
+Docker haalt bij elke build de laatste commit van de `main`-branch op — een
+`git pull` op TrueNAS zelf is dus niet nodig.
+
+**Let op — twee dingen om te weten:**
+- **Privé-repository**: dit werkt zo alleen bij een **publieke** repo. Voor
+  een privé-repo moet je een SSH-context of een token in de URL meegeven
+  (`https://<token>@github.com/...`), wat minder wenselijk is om in een
+  compose-bestand te zetten. Voor persoonlijke hobbyprojecten zonder
+  gevoelige data is een publieke repo doorgaans prima.
+- **Build-cache**: als een build merkwaardig genoeg je oude code lijkt te
+  gebruiken, forceer een verse clone met:
+  ```bash
+  docker compose build --no-cache && docker compose up -d
+  ```
 
 ## Ondersteunde formaten
 

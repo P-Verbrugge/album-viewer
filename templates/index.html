@@ -27,6 +27,7 @@
     <nav class="breadcrumbs" id="breadcrumbs" aria-label="Broodkruimelpad"></nav>
     <div class="topbar-actions">
       <button class="icon-btn" id="favorites-btn" title="Favorieten" aria-label="Favorieten">♥</button>
+      <button class="icon-btn" id="settings-btn" title="Instellingen" aria-label="Instellingen">⚙</button>
       <button class="icon-btn" id="theme-btn" title="Wissel thema" aria-label="Wissel tussen licht en donker">◐</button>
     </div>
   </header>
@@ -61,6 +62,33 @@
   </div>
 
   <div class="toast" id="toast" hidden></div>
+
+  <div class="modal-backdrop" id="settings-modal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" id="settings-close" aria-label="Sluit instellingen">&times;</button>
+      <h2 class="modal-title">Instellingen</h2>
+
+      <section class="settings-section">
+        <h3 class="settings-heading">Thumbnail-cache</h3>
+        <p class="settings-desc" id="cache-info-text">Cache-informatie laden...</p>
+
+        <div class="progress-wrap" id="cache-progress-wrap" hidden>
+          <div class="progress-bar"><div class="progress-fill" id="cache-progress-fill"></div></div>
+          <p class="progress-label" id="cache-progress-label"></p>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="cache-build-btn">Cache nu volledig aanmaken</button>
+          <button class="btn btn-secondary" id="cache-clear-btn">Cache legen</button>
+        </div>
+        <p class="settings-note">
+          Normaal wordt een thumbnail pas aangemaakt zodra je een foto voor het
+          eerst bekijkt. Met "Cache nu volledig aanmaken" worden alle foto's in
+          één keer alvast verwerkt, zodat bladeren daarna overal meteen snel is.
+        </p>
+      </section>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/app.js"></script>

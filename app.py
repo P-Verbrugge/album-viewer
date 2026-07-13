@@ -19,6 +19,8 @@ Alle configuratie via omgevingsvariabelen (zie docker-compose.yml):
 import hashlib
 import json
 import os
+import threading
+import time
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, request, send_file, render_template
@@ -41,6 +43,8 @@ DEFAULT_THUMB_SIZE = int(os.environ.get("THUMB_SIZE", "400"))
 COVER_SEARCH_DEPTH = 3  # hoe diep we zoeken naar een omslagfoto voor een album-tegel
 FAVORITES_FILE = CACHE_DIR / "favorites.json"
 FAVORITES_PATH = "__favorites__"  # virtueel pad voor het favorieten-overzicht
+CACHE_JOB_FILE = CACHE_DIR / "cache_job.json"
+cache_job_lock = threading.Lock()  # voorkomt dat 2 cache-taken tegelijk starten binnen dit proces
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".heif"}
 HEIF_EXTS = {".heic", ".heif"}  # deze formaten kan geen enkele browser rechtstreeks tonen
@@ -255,6 +259,23 @@ def browse():
     )
 
 
+def ensure_thumbnail(abs_path: Path, size: int) -> Path:
+    """Genereert (indien nodig) een thumbnail en retourneert het cache-bestand.
+    Wordt gebruikt door zowel de /api/thumbnail-route als de bulk-cache-taak."""
+    mtime = int(abs_path.stat().st_mtime)
+    cache_key = hashlib.sha1(f"{abs_path}:{mtime}:{size}".encode()).hexdigest()
+    cache_file = CACHE_DIR / f"{cache_key}.jpg"
+
+    if not cache_file.exists():
+        with Image.open(abs_path) as img:
+            img = ImageOps.exif_transpose(img)  # respecteer rotatie uit EXIF
+            img = img.convert("RGB")
+            img.thumbnail((size, size))
+            img.save(cache_file, "JPEG", quality=85)
+
+    return cache_file
+
+
 @app.route("/api/thumbnail")
 def thumbnail():
     rel_path = request.args.get("path", "")
@@ -264,19 +285,10 @@ def thumbnail():
     if not abs_path.is_file() or not is_image(abs_path):
         abort(404)
 
-    mtime = int(abs_path.stat().st_mtime)
-    cache_key = hashlib.sha1(f"{abs_path}:{mtime}:{size}".encode()).hexdigest()
-    cache_file = CACHE_DIR / f"{cache_key}.jpg"
-
-    if not cache_file.exists():
-        try:
-            with Image.open(abs_path) as img:
-                img = ImageOps.exif_transpose(img)  # respecteer rotatie uit EXIF
-                img = img.convert("RGB")
-                img.thumbnail((size, size))
-                img.save(cache_file, "JPEG", quality=85)
-        except Exception:
-            abort(415, "Kan geen thumbnail maken van dit bestand")
+    try:
+        cache_file = ensure_thumbnail(abs_path, size)
+    except Exception:
+        abort(415, "Kan geen thumbnail maken van dit bestand")
 
     return send_file(cache_file, mimetype="image/jpeg")
 
@@ -411,6 +423,114 @@ def exif_info():
     result["gps"] = gps
 
     return jsonify(result)
+
+
+# --------------------------------------------------------------------------
+# Bulk-cache taak (voor de instellingenpagina: "Cache nu volledig aanmaken")
+# --------------------------------------------------------------------------
+
+def read_cache_job() -> dict:
+    try:
+        return json.loads(CACHE_JOB_FILE.read_text())
+    except Exception:
+        return {
+            "status": "idle",
+            "total": 0,
+            "processed": 0,
+            "skipped": 0,
+            "started_at": None,
+            "finished_at": None,
+            "message": None,
+        }
+
+
+def write_cache_job(data: dict) -> None:
+    CACHE_JOB_FILE.write_text(json.dumps(data))
+
+
+def run_cache_job() -> None:
+    job = {
+        "status": "running",
+        "total": 0,
+        "processed": 0,
+        "skipped": 0,
+        "started_at": time.time(),
+        "finished_at": None,
+        "message": "Foto's aan het tellen...",
+    }
+    write_cache_job(job)
+
+    try:
+        all_images = [p for p in PHOTOS_ROOT.rglob("*") if p.is_file() and is_image(p)]
+        job["total"] = len(all_images)
+        job["message"] = None
+        write_cache_job(job)
+
+        for i, p in enumerate(all_images, start=1):
+            try:
+                ensure_thumbnail(p, DEFAULT_THUMB_SIZE)
+            except Exception:
+                job["skipped"] += 1  # bijv. een corrupt bestand; taak gaat gewoon door
+            job["processed"] = i
+            if i % 10 == 0 or i == job["total"]:
+                write_cache_job(job)
+
+        job["status"] = "done"
+        job["finished_at"] = time.time()
+        write_cache_job(job)
+    except Exception as e:
+        job["status"] = "error"
+        job["message"] = str(e)
+        job["finished_at"] = time.time()
+        write_cache_job(job)
+
+
+@app.route("/api/cache/info")
+def cache_info():
+    total_images = sum(1 for p in PHOTOS_ROOT.rglob("*") if p.is_file() and is_image(p))
+    cache_files = list(CACHE_DIR.glob("*.jpg"))
+    return jsonify(
+        {
+            "total_images": total_images,
+            "cached_files": len(cache_files),
+            "cache_size_bytes": sum(p.stat().st_size for p in cache_files),
+        }
+    )
+
+
+@app.route("/api/cache/status")
+def cache_status():
+    return jsonify(read_cache_job())
+
+
+@app.route("/api/cache/start", methods=["POST"])
+def start_cache_job():
+    with cache_job_lock:
+        current = read_cache_job()
+        if current.get("status") == "running":
+            return jsonify(current)
+
+        thread = threading.Thread(target=run_cache_job, daemon=True)
+        thread.start()
+
+    return jsonify(read_cache_job())
+
+
+@app.route("/api/cache/clear", methods=["POST"])
+def clear_cache():
+    current = read_cache_job()
+    if current.get("status") == "running":
+        abort(409, "Er loopt al een cache-taak — wacht tot deze klaar is voordat je de cache leegt.")
+
+    removed = 0
+    for p in CACHE_DIR.glob("*.jpg"):
+        try:
+            p.unlink()
+            removed += 1
+        except Exception:
+            pass
+
+    return jsonify({"removed": removed})
 
 
 if __name__ == "__main__":
