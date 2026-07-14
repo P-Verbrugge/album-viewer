@@ -469,6 +469,13 @@
       } else if (status.status === "error") {
         cacheProgressWrap.hidden = false;
         cacheProgressLabel.textContent = `Er ging iets mis: ${status.message || "onbekende fout"}`;
+      } else if (status.status === "interrupted") {
+        cacheProgressWrap.hidden = false;
+        const pct = status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
+        cacheProgressFill.style.width = `${pct}%`;
+        cacheProgressLabel.textContent =
+          `Onderbroken na ${status.processed} / ${status.total} foto's (bijv. door een herstart) ` +
+          `— klik opnieuw op "Cache nu volledig aanmaken" om verder te gaan.`;
       } else {
         cacheProgressWrap.hidden = true;
       }

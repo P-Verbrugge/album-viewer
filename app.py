@@ -448,6 +448,23 @@ def write_cache_job(data: dict) -> None:
     CACHE_JOB_FILE.write_text(json.dumps(data))
 
 
+def recover_stale_cache_job() -> None:
+    """Bij een herstart van de container kan er een taak in het bestand staan
+    met status 'running' terwijl het bijbehorende achtergrondproces allang
+    niet meer bestaat (bijv. omdat de container werd gestopt). Zonder deze
+    check zou de interface voor altijd op die 'lopende' taak blijven wachten
+    en de knoppen uitgeschakeld houden. We markeren zo'n taak daarom als
+    'interrupted' zodra de app opnieuw opstart."""
+    job = read_cache_job()
+    if job.get("status") == "running":
+        job["status"] = "interrupted"
+        job["finished_at"] = time.time()
+        write_cache_job(job)
+
+
+recover_stale_cache_job()  # meteen uitvoeren bij het opstarten van de app
+
+
 def run_cache_job() -> None:
     job = {
         "status": "running",
