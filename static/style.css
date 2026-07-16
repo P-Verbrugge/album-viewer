@@ -13,8 +13,8 @@
   --font-mono: "IBM Plex Mono", monospace;
 }
 
-/* Lichte variant: een "lichttafel" i.p.v. een donkere kamer, zelfde amberkleur
-   als herkenningspunt tussen beide thema's. */
+/* Light variant: a "light table" instead of a dark room, same amber
+   accent color as the visual link between both themes. */
 [data-theme="light"] {
   --bg: #f7f5f0;
   --surface: #ffffff;
@@ -239,7 +239,7 @@ main {
   font-weight: 600;
   font-size: 1.05rem;
   letter-spacing: 0.02em;
-  color: #f2f0ec; /* blijft licht, ook in het lichte thema: staat over de foto */
+  color: #f2f0ec; /* stays light even in the light theme: this sits on top of the photo */
 }
 
 .tile-fav-btn {
@@ -334,7 +334,7 @@ main {
   font-size: 0.95rem;
 }
 
-/* ---------- Lightbox (blijft altijd donker, ongeacht thema) ---------- */
+/* ---------- Lightbox (always stays dark, regardless of theme) ---------- */
 
 .lightbox {
   position: fixed;
@@ -419,7 +419,7 @@ main {
   letter-spacing: 0.05em;
 }
 
-/* ---------- Info-paneel (EXIF + kaart) ---------- */
+/* ---------- Info panel (EXIF + map) ---------- */
 
 .info-panel {
   position: absolute;
@@ -494,7 +494,7 @@ main {
   display: none;
 }
 
-/* ---------- Instellingen-modal ---------- */
+/* ---------- Settings modal ---------- */
 
 .modal-backdrop {
   position: fixed;
@@ -638,6 +638,101 @@ main {
   font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+/* ---------- Auth pages (setup / login) ---------- */
+
+.logout-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.auth-body {
+  display: flex;
+  min-height: 100vh;
+}
+
+.auth-page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.auth-card {
+  width: min(400px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2rem;
+}
+
+.auth-brand {
+  cursor: default;
+  margin-bottom: 1.5rem;
+}
+
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.6rem;
+}
+
+.auth-sub {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+}
+
+.auth-error {
+  background: color-mix(in srgb, #ff5d5d 15%, transparent);
+  border: 1px solid color-mix(in srgb, #ff5d5d 40%, transparent);
+  color: #ff5d5d;
+  font-size: 0.85rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  margin: 0 0 1rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.auth-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-top: 0.6rem;
+}
+
+.auth-input {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.auth-submit {
+  margin-top: 1.25rem;
+  width: 100%;
+  text-align: center;
+  padding: 0.7rem 1rem;
 }
 
 @media (max-width: 600px) {

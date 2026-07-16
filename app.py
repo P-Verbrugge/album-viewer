@@ -1,66 +1,200 @@
 """
-Simpele, zelfstandige albumviewer (geen Immich nodig).
+Simple, self-contained album viewer (no Immich required).
 
-Logica per map:
-  - Zijn er submappen?  -> toon die submappen als albums (met een cover-foto).
-  - Geen submappen, wel foto's? -> toon de foto's.
-  - Niks van beide?     -> lege staat.
+Folder logic:
+  - Does the folder contain subfolders?  -> show those subfolders as albums (with a cover photo).
+  - No subfolders, but photos?           -> show the photos.
+  - Neither?                             -> empty state.
 
-Extra's:
-  - Favorieten (opgeslagen server-side in CACHE_DIR/favorites.json)
-  - EXIF-informatie + GPS-locatie per foto
+Extras:
+  - Login required (single account, created on first visit via /setup)
+  - Favorites (stored server-side in CACHE_DIR/favorites.json)
+  - EXIF info + GPS location per photo
+  - Bulk thumbnail caching job (for the settings panel)
 
-Alle configuratie via omgevingsvariabelen (zie docker-compose.yml):
-  PHOTOS_ROOT  map met je foto's (read-only gemount)      default: /photos
-  CACHE_DIR    map voor thumbnail-cache + favorieten       default: /cache
-  THUMB_SIZE   standaard thumbnail-breedte in pixels        default: 400
+All configuration via environment variables (see docker-compose.yml):
+  PHOTOS_ROOT  folder with your photos (mounted read-only)   default: /photos
+  CACHE_DIR    folder for thumbnail cache + app data          default: /cache
+  THUMB_SIZE   default thumbnail width in pixels               default: 400
 """
 
 import hashlib
 import json
 import os
+import secrets
 import threading
 import time
+from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, request, send_file, render_template
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 from PIL import ExifTags, Image, ImageOps
 from PIL.ExifTags import GPSTAGS, TAGS
+from werkzeug.security import check_password_hash, generate_password_hash
 
 try:
     import pillow_heif
     pillow_heif.register_heif_opener()
     HEIC_SUPPORTED = True
 except ImportError:
-    # De container is nog niet herbouwd met pillow-heif in requirements.txt,
-    # of het platform heeft geen wheel beschikbaar. HEIC-bestanden worden dan
-    # gewoon overgeslagen i.p.v. de app te laten crashen.
+    # The container hasn't been rebuilt with pillow-heif in requirements.txt yet,
+    # or no wheel is available for this platform. HEIC files are simply skipped
+    # instead of crashing the app.
     HEIC_SUPPORTED = False
 
 PHOTOS_ROOT = Path(os.environ.get("PHOTOS_ROOT", "/photos")).resolve()
 CACHE_DIR = Path(os.environ.get("CACHE_DIR", "/cache")).resolve()
 DEFAULT_THUMB_SIZE = int(os.environ.get("THUMB_SIZE", "400"))
-COVER_SEARCH_DEPTH = 3  # hoe diep we zoeken naar een omslagfoto voor een album-tegel
+COVER_SEARCH_DEPTH = 3  # how deep we search for a cover photo for an album tile
 FAVORITES_FILE = CACHE_DIR / "favorites.json"
-FAVORITES_PATH = "__favorites__"  # virtueel pad voor het favorieten-overzicht
+FAVORITES_PATH = "__favorites__"  # virtual path for the favorites overview
 CACHE_JOB_FILE = CACHE_DIR / "cache_job.json"
-cache_job_lock = threading.Lock()  # voorkomt dat 2 cache-taken tegelijk starten binnen dit proces
+cache_job_lock = threading.Lock()  # prevents two cache jobs starting at once within this process
+
+ACCOUNT_FILE = CACHE_DIR / "account.json"
+SECRET_KEY_FILE = CACHE_DIR / "secret_key.txt"
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".heif"}
-HEIF_EXTS = {".heic", ".heif"}  # deze formaten kan geen enkele browser rechtstreeks tonen
+HEIF_EXTS = {".heic", ".heif"}  # no browser can display these formats directly
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 
 
+def get_or_create_secret_key() -> str:
+    """Persists a random Flask session-signing key in CACHE_DIR, so login
+    sessions survive an app/container restart instead of everyone being
+    logged out every time."""
+    if SECRET_KEY_FILE.exists():
+        return SECRET_KEY_FILE.read_text().strip()
+    key = secrets.token_hex(32)
+    SECRET_KEY_FILE.write_text(key)
+    return key
+
+
+app.config["SECRET_KEY"] = get_or_create_secret_key()
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+
 # --------------------------------------------------------------------------
-# Pad-helpers
+# Authentication
+# --------------------------------------------------------------------------
+
+def account_exists() -> bool:
+    return ACCOUNT_FILE.exists()
+
+
+def load_account():
+    try:
+        return json.loads(ACCOUNT_FILE.read_text())
+    except Exception:
+        return None
+
+
+def save_account(username: str, password: str) -> None:
+    ACCOUNT_FILE.write_text(
+        json.dumps({"username": username, "password_hash": generate_password_hash(password)})
+    )
+
+
+# Endpoints reachable without being logged in (auth pages + static assets).
+PUBLIC_ENDPOINTS = {"setup", "login", "static"}
+
+
+@app.before_request
+def require_login():
+    if request.endpoint in PUBLIC_ENDPOINTS:
+        return None
+
+    if not account_exists():
+        return redirect(url_for("setup"))
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login", next=request.path))
+
+    return None
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    # Only usable once: as soon as an account exists, this route just bounces to /login.
+    if account_exists():
+        return redirect(url_for("login"))
+
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+
+        if not username or not password:
+            error = "Vul een gebruikersnaam en wachtwoord in."
+        elif password != password_confirm:
+            error = "Wachtwoorden komen niet overeen."
+        elif len(password) < 6:
+            error = "Wachtwoord moet minstens 6 tekens lang zijn."
+        else:
+            save_account(username, password)
+            session.clear()
+            session["logged_in"] = True
+            session["username"] = username
+            session.permanent = True
+            return redirect(url_for("index"))
+
+    return render_template("setup.html", error=error)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not account_exists():
+        return redirect(url_for("setup"))
+
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        account = load_account()
+
+        if account and username == account.get("username") and check_password_hash(
+            account.get("password_hash", ""), password
+        ):
+            session.clear()
+            session["logged_in"] = True
+            session["username"] = username
+            session.permanent = True
+            next_path = request.args.get("next")
+            return redirect(next_path if next_path else url_for("index"))
+
+        error = "Onjuiste gebruikersnaam of wachtwoord."
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+# --------------------------------------------------------------------------
+# Path helpers
 # --------------------------------------------------------------------------
 
 def safe_resolve(rel_path: str) -> Path:
-    """Zet een relatief pad (van de client) om naar een absoluut pad,
-    en blokkeert alles dat buiten PHOTOS_ROOT valt (path traversal)."""
+    """Turns a relative path (from the client) into an absolute path, and
+    blocks anything that falls outside PHOTOS_ROOT (path traversal)."""
     rel_path = (rel_path or "").strip("/")
     candidate = (PHOTOS_ROOT / rel_path).resolve()
     if candidate != PHOTOS_ROOT and PHOTOS_ROOT not in candidate.parents:
@@ -75,8 +209,8 @@ def is_image(path: Path) -> bool:
 
 
 def find_cover(dir_path: Path, max_depth: int = COVER_SEARCH_DEPTH):
-    """Zoekt de eerste foto (alfabetisch, ondiep-eerst) onder dir_path,
-    zodat een album-tegel een voorbeeldfoto kan tonen."""
+    """Finds the first photo (alphabetically, shallowest first) under
+    dir_path, so an album tile can show a preview photo."""
     try:
         entries = sorted(dir_path.iterdir(), key=lambda p: p.name.lower())
     except PermissionError:
@@ -101,8 +235,8 @@ def rel(path: Path) -> str:
 
 
 # --------------------------------------------------------------------------
-# Favorieten (server-side opgeslagen, zodat ze gelden voor iedereen die de
-# app bezoekt, ongeacht browser/apparaat)
+# Favorites (stored server-side, so they apply to everyone visiting the
+# app, regardless of browser/device)
 # --------------------------------------------------------------------------
 
 def load_favorites() -> set:
@@ -117,7 +251,7 @@ def save_favorites(favs: set) -> None:
 
 
 # --------------------------------------------------------------------------
-# EXIF-helpers
+# EXIF helpers
 # --------------------------------------------------------------------------
 
 def dms_to_decimal(dms, ref):
@@ -158,7 +292,7 @@ def format_focal_length(value):
 
 
 def read_exif(img):
-    """Retourneert (dict met leesbare exif-tags, gps dict of None)."""
+    """Returns (dict of readable EXIF tags, gps dict or None)."""
     exif = img.getexif()
     if not exif:
         return {}, None
@@ -188,7 +322,7 @@ def read_exif(img):
 
 
 # --------------------------------------------------------------------------
-# Routes - pagina
+# Routes - page
 # --------------------------------------------------------------------------
 
 @app.route("/")
@@ -197,7 +331,7 @@ def index():
 
 
 # --------------------------------------------------------------------------
-# Routes - browsen
+# Routes - browsing
 # --------------------------------------------------------------------------
 
 @app.route("/api/browse")
@@ -260,15 +394,15 @@ def browse():
 
 
 def ensure_thumbnail(abs_path: Path, size: int) -> Path:
-    """Genereert (indien nodig) een thumbnail en retourneert het cache-bestand.
-    Wordt gebruikt door zowel de /api/thumbnail-route als de bulk-cache-taak."""
+    """Generates (if needed) a thumbnail and returns the cache file.
+    Used by both the /api/thumbnail route and the bulk-cache job."""
     mtime = int(abs_path.stat().st_mtime)
     cache_key = hashlib.sha1(f"{abs_path}:{mtime}:{size}".encode()).hexdigest()
     cache_file = CACHE_DIR / f"{cache_key}.jpg"
 
     if not cache_file.exists():
         with Image.open(abs_path) as img:
-            img = ImageOps.exif_transpose(img)  # respecteer rotatie uit EXIF
+            img = ImageOps.exif_transpose(img)  # respect rotation from EXIF
             img = img.convert("RGB")
             img.thumbnail((size, size))
             img.save(cache_file, "JPEG", quality=85)
@@ -308,9 +442,8 @@ def full_image():
 
 
 def serve_as_jpeg(abs_path: Path):
-    """Zet HEIC/HEIF om naar JPEG (browsers kunnen HEIC niet rechtstreeks
-    weergeven), en cacht het resultaat zodat dit maar één keer per bestand
-    hoeft te gebeuren."""
+    """Converts HEIC/HEIF to JPEG (browsers can't display HEIC directly),
+    and caches the result so this only has to happen once per file."""
     if not HEIC_SUPPORTED:
         abort(415, "HEIC wordt niet ondersteund — herbouw de container met pillow-heif")
 
@@ -331,7 +464,7 @@ def serve_as_jpeg(abs_path: Path):
 
 
 # --------------------------------------------------------------------------
-# Routes - favorieten
+# Routes - favorites
 # --------------------------------------------------------------------------
 
 @app.route("/api/favorites/toggle", methods=["POST"])
@@ -426,7 +559,7 @@ def exif_info():
 
 
 # --------------------------------------------------------------------------
-# Bulk-cache taak (voor de instellingenpagina: "Cache nu volledig aanmaken")
+# Bulk-cache job (for the settings panel: "Cache nu volledig aanmaken")
 # --------------------------------------------------------------------------
 
 def read_cache_job() -> dict:
@@ -449,12 +582,11 @@ def write_cache_job(data: dict) -> None:
 
 
 def recover_stale_cache_job() -> None:
-    """Bij een herstart van de container kan er een taak in het bestand staan
-    met status 'running' terwijl het bijbehorende achtergrondproces allang
-    niet meer bestaat (bijv. omdat de container werd gestopt). Zonder deze
-    check zou de interface voor altijd op die 'lopende' taak blijven wachten
-    en de knoppen uitgeschakeld houden. We markeren zo'n taak daarom als
-    'interrupted' zodra de app opnieuw opstart."""
+    """After a container restart, the job file might still say 'running'
+    even though the background thread that owned it is long gone (e.g.
+    because the container was stopped). Without this check, the UI would
+    wait forever on that 'running' job and keep the buttons disabled. So we
+    mark such a job as 'interrupted' as soon as the app starts up again."""
     job = read_cache_job()
     if job.get("status") == "running":
         job["status"] = "interrupted"
@@ -462,7 +594,7 @@ def recover_stale_cache_job() -> None:
         write_cache_job(job)
 
 
-recover_stale_cache_job()  # meteen uitvoeren bij het opstarten van de app
+recover_stale_cache_job()  # run immediately when the app starts
 
 
 def run_cache_job() -> None:
@@ -487,7 +619,7 @@ def run_cache_job() -> None:
             try:
                 ensure_thumbnail(p, DEFAULT_THUMB_SIZE)
             except Exception:
-                job["skipped"] += 1  # bijv. een corrupt bestand; taak gaat gewoon door
+                job["skipped"] += 1  # e.g. a corrupt file; the job just continues
             job["processed"] = i
             if i % 10 == 0 or i == job["total"]:
                 write_cache_job(job)

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Account aanmaken — Albums</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem("album-theme");
+      document.documentElement.setAttribute("data-theme", saved === "light" ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body class="auth-body">
+  <main class="auth-page">
+    <div class="auth-card">
+      <div class="brand auth-brand">
+        <span class="brand-mark">◍</span>
+        <span class="brand-name">ALBUMS</span>
+      </div>
+
+      <h1 class="auth-title">Welkom! Maak je account aan</h1>
+      <p class="auth-sub">
+        Dit is de eerste keer dat je deze albumviewer opent. Kies een
+        gebruikersnaam en wachtwoord waarmee je (en de mensen die je toegang
+        geeft) voortaan inlogt.
+      </p>
+
+      {% if error %}
+      <p class="auth-error">{{ error }}</p>
+      {% endif %}
+
+      <form method="post" class="auth-form">
+        <label class="auth-label" for="username">Gebruikersnaam</label>
+        <input class="auth-input" type="text" id="username" name="username" autocomplete="username" required autofocus />
+
+        <label class="auth-label" for="password">Wachtwoord</label>
+        <input class="auth-input" type="password" id="password" name="password" autocomplete="new-password" required minlength="6" />
+
+        <label class="auth-label" for="password_confirm">Herhaal wachtwoord</label>
+        <input class="auth-input" type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required minlength="6" />
+
+        <button class="btn btn-primary auth-submit" type="submit">Account aanmaken</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

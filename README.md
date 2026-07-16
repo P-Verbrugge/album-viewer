@@ -114,6 +114,29 @@ Docker haalt bij elke build de laatste commit van de `main`-branch op — een
   docker compose build --no-cache && docker compose up -d
   ```
 
+## Inloggen
+
+De app is nu afgeschermd met een gebruikersaccount — niemand kan de albums
+zien zonder in te loggen.
+
+- **Eerste keer openen**: je krijgt een "Account aanmaken"-scherm te zien.
+  Kies daar zelf een gebruikersnaam en wachtwoord (minimaal 6 tekens). Dit
+  wordt lokaal opgeslagen (het wachtwoord altijd gehasht, nooit in platte
+  tekst) in `CACHE_DIR/account.json` — dus in het `album-viewer-cache`
+  volume, en overleeft dus een herstart van de container.
+- **Daarna**: iedereen die de app bezoekt krijgt een inlogscherm en heeft dit
+  ene account nodig.
+- **Wachtwoord vergeten / opnieuw beginnen**: verwijder het bestand
+  `account.json` uit de cache, dan verschijnt het "Account aanmaken"-scherm
+  weer:
+  ```bash
+  docker exec -it album-viewer rm -f /cache/account.json
+  ```
+- Er is momenteel maar **één account** ondersteund (geen aparte
+  gebruikersnamen per gezinslid) — iedereen die toegang moet hebben, deelt
+  dezelfde inloggegevens. Laat het weten als je losse accounts per persoon
+  wilt, dat is goed uit te breiden.
+
 ## Ondersteunde formaten
 
 `.jpg .jpeg .png .gif .webp .bmp .tiff .heic`

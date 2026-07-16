@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css" />
   <script>
-    // Thema meteen zetten, voor de eerste render, om flitsen te voorkomen
+    // Apply the theme immediately, before the first render, to avoid a flash
     (function () {
       var saved = localStorage.getItem("album-theme");
       document.documentElement.setAttribute("data-theme", saved === "light" ? "light" : "dark");
@@ -29,6 +29,9 @@
       <button class="icon-btn" id="favorites-btn" title="Favorieten" aria-label="Favorieten">♥</button>
       <button class="icon-btn" id="settings-btn" title="Instellingen" aria-label="Instellingen">⚙</button>
       <button class="icon-btn" id="theme-btn" title="Wissel thema" aria-label="Wissel tussen licht en donker">◐</button>
+      <form method="post" action="/logout" class="logout-form">
+        <button class="icon-btn" type="submit" title="Uitloggen" aria-label="Uitloggen">⎋</button>
+      </form>
     </div>
   </header>
 

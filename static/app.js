@@ -42,7 +42,7 @@
   let leafletMap = null;
   let leafletMarker = null;
 
-  // ---------------- Thema ----------------
+  // ---------------- Theme ----------------
 
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
@@ -58,7 +58,7 @@
 
   favoritesBtn.addEventListener("click", () => loadPath(FAVORITES_PATH));
 
-  // ---------------- Navigatie ----------------
+  // ---------------- Navigation ----------------
 
   function pathFromLocation() {
     const params = new URLSearchParams(window.location.search);
@@ -91,7 +91,7 @@
       return;
     }
     if (!data.breadcrumbs || data.breadcrumbs.length === 0) {
-      // We staan al op het hoofdoverzicht, niets om naar terug te gaan.
+      // We're already at the top-level overview, nothing to go back to.
       backBtn.hidden = true;
       backBtn.onclick = null;
       return;
@@ -220,7 +220,7 @@
     }
     const data = await res.json();
 
-    // Update alle knoppen die naar deze foto verwijzen (grid + eventueel lightbox)
+    // Update every button that refers to this photo (grid + optionally the lightbox)
     document.querySelectorAll(`[data-path="${CSS.escape(path)}"] .tile-fav-btn`).forEach((btn) => {
       setFavButtonState(btn, data.favorite);
     });
@@ -232,8 +232,8 @@
 
     showToast(data.favorite ? "Toegevoegd aan favorieten" : "Verwijderd uit favorieten", data.favorite);
 
-    // Als we in het favorieten-overzicht zitten en een foto wordt "ontfavoriet",
-    // laat 'm meteen verdwijnen.
+    // If we're in the favorites overview and a photo gets "unfavorited",
+    // make it disappear immediately.
     if (!data.favorite && pathFromLocation() === FAVORITES_PATH) {
       loadPath(FAVORITES_PATH, false);
     }
@@ -242,13 +242,13 @@
   function setFavButtonState(btn, isFavorite) {
     if (!btn) return;
     btn.classList.toggle("active", isFavorite);
-    // Alleen het hartje in de tegels heeft een los ♡/♥-symbool; de knop in de
-    // viewer (lb-fav) blijft altijd hetzelfde glyph en verandert enkel van kleur.
+    // Only the heart on the tiles swaps between the ♡/♥ glyphs; the button in
+    // the viewer (lb-fav) always keeps the same glyph and only changes color.
     if (btn.classList.contains("tile-fav-btn")) {
       btn.textContent = isFavorite ? "♥" : "♡";
     }
     btn.classList.remove("pulse");
-    // Forceer een reflow zodat de animatie ook werkt bij snel achter elkaar klikken.
+    // Force a reflow so the animation still plays on rapid repeated clicks.
     void btn.offsetWidth;
     btn.classList.add("pulse");
   }
@@ -354,7 +354,7 @@
     if (e.key === "ArrowLeft") showPrev();
   });
 
-  // ---------------- EXIF / info-paneel ----------------
+  // ---------------- EXIF / info panel ----------------
 
   const EXIF_LABELS = [
     ["camera", "Camera"],
@@ -419,12 +419,12 @@
       leafletMap.setView([lat, lon], 13);
       leafletMarker.setLatLng([lat, lon]);
     }
-    // De kaart-container was tot net verborgen (display:none), dus Leaflet
-    // moet z'n afmetingen opnieuw berekenen zodra hij zichtbaar wordt.
+    // The map container was hidden until just now (display:none), so Leaflet
+    // needs to recalculate its size now that it's visible.
     setTimeout(() => leafletMap.invalidateSize(), 50);
   }
 
-  // ---------------- Instellingen / bulk-cache ----------------
+  // ---------------- Settings / bulk cache ----------------
 
   let cachePollTimer = null;
 
