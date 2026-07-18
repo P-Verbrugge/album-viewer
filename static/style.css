@@ -640,6 +640,25 @@ main {
   color: var(--text-muted);
 }
 
+/* ---------- Infinite scroll ---------- */
+
+.scroll-sentinel {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.scroll-sentinel[hidden] {
+  display: none;
+}
+
+.scroll-sentinel-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
 /* ---------- Auth pages (setup / login) ---------- */
 
 .logout-form {

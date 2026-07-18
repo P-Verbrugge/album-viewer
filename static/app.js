@@ -42,6 +42,60 @@
   let leafletMap = null;
   let leafletMarker = null;
 
+  // ---------------- Pagination / infinite scroll ----------------
+
+  const PAGE_SIZE = 300;
+  const scrollSentinel = document.getElementById("scroll-sentinel");
+  let currentBrowsePath = "";
+  let currentOffset = 0;
+  let hasMore = false;
+  let isLoadingMore = false;
+
+  const scrollObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        loadMoreItems();
+      }
+    },
+    { rootMargin: "600px" } // start loading well before the user actually hits the bottom
+  );
+
+  function setupInfiniteScroll() {
+    scrollSentinel.hidden = false;
+    scrollObserver.observe(scrollSentinel);
+  }
+
+  function teardownInfiniteScroll() {
+    scrollSentinel.hidden = true;
+    scrollObserver.unobserve(scrollSentinel);
+  }
+
+  async function loadMoreItems() {
+    if (isLoadingMore || !hasMore) return;
+    isLoadingMore = true;
+    try {
+      const res = await fetch(
+        `/api/browse?path=${encodeURIComponent(currentBrowsePath)}&offset=${currentOffset}&limit=${PAGE_SIZE}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+
+      if (data.type === "folders") {
+        data.items.forEach((item) => grid.appendChild(folderTile(item)));
+      } else if (data.type === "photos") {
+        const startIndex = currentPhotos.length;
+        currentPhotos = currentPhotos.concat(data.items);
+        data.items.forEach((item, i) => grid.appendChild(photoTile(item, startIndex + i)));
+      }
+
+      currentOffset += data.items.length;
+      hasMore = !!data.has_more;
+      if (!hasMore) teardownInfiniteScroll();
+    } finally {
+      isLoadingMore = false;
+    }
+  }
+
   // ---------------- Theme ----------------
 
   function applyTheme(theme) {
@@ -66,9 +120,10 @@
   }
 
   async function loadPath(path, pushState = true) {
-    const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+    const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}&offset=0&limit=${PAGE_SIZE}`);
     if (!res.ok) {
       grid.innerHTML = "";
+      teardownInfiniteScroll();
       showEmpty("Niets gevonden", "Deze locatie bestaat niet (meer).");
       return;
     }
@@ -130,11 +185,16 @@
     grid.innerHTML = "";
     emptyState.hidden = true;
     currentPhotos = [];
+    teardownInfiniteScroll();
+
+    currentBrowsePath = data.path;
+    currentOffset = data.items.length;
+    hasMore = !!data.has_more;
 
     if (data.type === "folders") {
       data.items.forEach((item) => grid.appendChild(folderTile(item)));
     } else if (data.type === "photos") {
-      currentPhotos = data.items;
+      currentPhotos = data.items.slice();
       if (data.items.length === 0 && data.path === FAVORITES_PATH) {
         showEmpty("Nog geen favorieten", "Klik op het hartje bij een foto om 'm hier te laten verschijnen.");
       } else {
@@ -142,6 +202,10 @@
       }
     } else {
       showEmpty("Niets te zien hier", "Deze map bevat geen submappen of foto's.");
+    }
+
+    if (hasMore) {
+      setupInfiniteScroll();
     }
   }
 

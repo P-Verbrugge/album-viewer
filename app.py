@@ -334,19 +334,46 @@ def index():
 # Routes - browsing
 # --------------------------------------------------------------------------
 
+DEFAULT_PAGE_SIZE = 300
+MAX_PAGE_SIZE = 1000
+
+
+def paginate(items: list, offset: int, limit: int):
+    total = len(items)
+    page = items[offset : offset + limit]
+    has_more = offset + limit < total
+    return page, total, has_more
+
+
 @app.route("/api/browse")
 def browse():
     rel_path = request.args.get("path", "")
     favs = load_favorites()
 
+    offset = max(0, request.args.get("offset", default=0, type=int) or 0)
+    limit = request.args.get("limit", default=DEFAULT_PAGE_SIZE, type=int) or DEFAULT_PAGE_SIZE
+    limit = max(1, min(limit, MAX_PAGE_SIZE))
+
     if rel_path == FAVORITES_PATH:
+        all_favs = sorted(favs)
+        page_favs, total, has_more = paginate(all_favs, offset, limit)
         items = []
-        for fav_path in sorted(favs):
+        for fav_path in page_favs:
             abs_p = PHOTOS_ROOT / fav_path
             if abs_p.is_file() and is_image(abs_p):
                 items.append({"name": abs_p.name, "path": fav_path, "favorite": True})
         breadcrumbs = [{"name": "Favorieten", "path": FAVORITES_PATH}]
-        return jsonify({"type": "photos", "path": FAVORITES_PATH, "breadcrumbs": breadcrumbs, "items": items})
+        return jsonify(
+            {
+                "type": "photos",
+                "path": FAVORITES_PATH,
+                "breadcrumbs": breadcrumbs,
+                "items": items,
+                "total": total,
+                "offset": offset,
+                "has_more": has_more,
+            }
+        )
 
     abs_path = safe_resolve(rel_path)
 
@@ -368,8 +395,11 @@ def browse():
             breadcrumbs.append({"name": part, "path": "/".join(parts[: i + 1])})
 
     if subdirs:
+        # Only compute a cover photo (which involves a recursive folder search)
+        # for the folders on this page — not for every subfolder up front.
+        page_dirs, total, has_more = paginate(subdirs, offset, limit)
         items = []
-        for d in subdirs:
+        for d in page_dirs:
             cover = find_cover(d)
             items.append(
                 {
@@ -379,17 +409,42 @@ def browse():
                 }
             )
         return jsonify(
-            {"type": "folders", "path": rel_path.strip("/"), "breadcrumbs": breadcrumbs, "items": items}
+            {
+                "type": "folders",
+                "path": rel_path.strip("/"),
+                "breadcrumbs": breadcrumbs,
+                "items": items,
+                "total": total,
+                "offset": offset,
+                "has_more": has_more,
+            }
         )
 
     if photos:
-        items = [{"name": p.name, "path": rel(p), "favorite": rel(p) in favs} for p in photos]
+        page_photos, total, has_more = paginate(photos, offset, limit)
+        items = [{"name": p.name, "path": rel(p), "favorite": rel(p) in favs} for p in page_photos]
         return jsonify(
-            {"type": "photos", "path": rel_path.strip("/"), "breadcrumbs": breadcrumbs, "items": items}
+            {
+                "type": "photos",
+                "path": rel_path.strip("/"),
+                "breadcrumbs": breadcrumbs,
+                "items": items,
+                "total": total,
+                "offset": offset,
+                "has_more": has_more,
+            }
         )
 
     return jsonify(
-        {"type": "empty", "path": rel_path.strip("/"), "breadcrumbs": breadcrumbs, "items": []}
+        {
+            "type": "empty",
+            "path": rel_path.strip("/"),
+            "breadcrumbs": breadcrumbs,
+            "items": [],
+            "total": 0,
+            "offset": 0,
+            "has_more": False,
+        }
     )
 
 

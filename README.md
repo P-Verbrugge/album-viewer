@@ -137,6 +137,15 @@ zien zonder in te loggen.
   dezelfde inloggegevens. Laat het weten als je losse accounts per persoon
   wilt, dat is goed uit te breiden.
 
+## Performance bij grote mappen
+
+Mappen met heel veel foto's of submappen direct erin (honderden tot
+duizenden) worden niet meer in één keer geladen. De server stuurt ze in
+pagina's van 300 items, en de app laadt vanzelf een volgende pagina zodra je
+richting de onderkant van het scherm scrolt ("infinite scroll") — je merkt
+hier normaal niets van, behalve dat bladeren door grote albums nu vlot blijft
+in plaats van in één keer duizenden tegels tegelijk op te bouwen.
+
 ## Ondersteunde formaten
 
 `.jpg .jpeg .png .gif .webp .bmp .tiff .heic`
