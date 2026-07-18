@@ -60,6 +60,8 @@ FAVORITES_FILE = CACHE_DIR / "favorites.json"
 FAVORITES_PATH = "__favorites__"  # virtual path for the favorites overview
 CACHE_JOB_FILE = CACHE_DIR / "cache_job.json"
 cache_job_lock = threading.Lock()  # prevents two cache jobs starting at once within this process
+GPS_INDEX_FILE = CACHE_DIR / "gps_index.json"
+gps_index_lock = threading.Lock()  # guards read-modify-write of the GPS index within this process
 
 ACCOUNT_FILE = CACHE_DIR / "account.json"
 SECRET_KEY_FILE = CACHE_DIR / "secret_key.txt"
@@ -448,19 +450,57 @@ def browse():
     )
 
 
+def load_gps_index() -> dict:
+    try:
+        return json.loads(GPS_INDEX_FILE.read_text())
+    except Exception:
+        return {}
+
+
+def save_gps_index(index: dict) -> None:
+    GPS_INDEX_FILE.write_text(json.dumps(index))
+
+
+def record_gps(rel_path: str, name: str, mtime: int, gps) -> None:
+    with gps_index_lock:
+        index = load_gps_index()
+        index[rel_path] = {
+            "mtime": mtime,
+            "name": name,
+            "lat": gps["lat"] if gps else None,
+            "lon": gps["lon"] if gps else None,
+        }
+        save_gps_index(index)
+
+
 def ensure_thumbnail(abs_path: Path, size: int) -> Path:
     """Generates (if needed) a thumbnail and returns the cache file.
-    Used by both the /api/thumbnail route and the bulk-cache job."""
+    Used by both the /api/thumbnail route and the bulk-cache job.
+
+    While the file is open anyway, this also opportunistically checks
+    whether its GPS location has been recorded yet in the GPS index (used
+    by the map overview), so browsing/caching photos gradually builds up
+    the map data without a separate full-library scan."""
     mtime = int(abs_path.stat().st_mtime)
     cache_key = hashlib.sha1(f"{abs_path}:{mtime}:{size}".encode()).hexdigest()
     cache_file = CACHE_DIR / f"{cache_key}.jpg"
 
-    if not cache_file.exists():
+    normalized = rel(abs_path)
+    gps_entry = load_gps_index().get(normalized)
+    needs_gps_check = gps_entry is None or gps_entry.get("mtime") != mtime
+    needs_thumb = not cache_file.exists()
+
+    if needs_thumb or needs_gps_check:
         with Image.open(abs_path) as img:
-            img = ImageOps.exif_transpose(img)  # respect rotation from EXIF
-            img = img.convert("RGB")
-            img.thumbnail((size, size))
-            img.save(cache_file, "JPEG", quality=85)
+            if needs_gps_check:
+                _, gps = read_exif(img)
+                record_gps(normalized, abs_path.name, mtime, gps)
+
+            if needs_thumb:
+                thumb_img = ImageOps.exif_transpose(img)  # respect rotation from EXIF
+                thumb_img = thumb_img.convert("RGB")
+                thumb_img.thumbnail((size, size))
+                thumb_img.save(cache_file, "JPEG", quality=85)
 
     return cache_file
 
@@ -611,6 +651,38 @@ def exif_info():
     result["gps"] = gps
 
     return jsonify(result)
+
+
+# --------------------------------------------------------------------------
+# Routes - map overview
+# --------------------------------------------------------------------------
+
+@app.route("/api/map/photos")
+def map_photos():
+    """Returns every photo that has a known GPS location, for the map
+    overview. Backed by the GPS index built up in ensure_thumbnail(), so
+    this stays fast even for large libraries — no re-scanning of files here."""
+    favs = load_favorites()
+    index = load_gps_index()
+
+    items = []
+    for rel_path, entry in index.items():
+        lat, lon = entry.get("lat"), entry.get("lon")
+        if lat is None or lon is None:
+            continue
+        if not (PHOTOS_ROOT / rel_path).is_file():
+            continue  # photo was since deleted/moved; skip stale entries
+        items.append(
+            {
+                "path": rel_path,
+                "name": entry.get("name", Path(rel_path).name),
+                "lat": lat,
+                "lon": lon,
+                "favorite": rel_path in favs,
+            }
+        )
+
+    return jsonify({"items": items, "total": len(items)})
 
 
 # --------------------------------------------------------------------------

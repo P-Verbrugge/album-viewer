@@ -13,6 +13,11 @@
   const themeBtn = document.getElementById("theme-btn");
   const favoritesBtn = document.getElementById("favorites-btn");
   const settingsBtn = document.getElementById("settings-btn");
+  const mapBtn = document.getElementById("map-btn");
+  const mapOverlay = document.getElementById("map-overlay");
+  const mapClose = document.getElementById("map-close");
+  const mapContainerEl = document.getElementById("map-container");
+  const mapEmptyEl = document.getElementById("map-empty");
   const settingsModal = document.getElementById("settings-modal");
   const settingsClose = document.getElementById("settings-close");
   const cacheInfoText = document.getElementById("cache-info-text");
@@ -362,6 +367,10 @@
     lightbox.hidden = true;
     lbImage.src = "";
     infoPanel.hidden = true;
+    if (savedGridPhotos !== null) {
+      currentPhotos = savedGridPhotos;
+      savedGridPhotos = null;
+    }
   }
 
   function showNext() {
@@ -404,6 +413,10 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !settingsModal.hidden) {
       closeSettings();
+      return;
+    }
+    if (e.key === "Escape" && !mapOverlay.hidden) {
+      closeMapOverview();
       return;
     }
     if (lightbox.hidden) return;
@@ -606,6 +619,94 @@
     } finally {
       cacheClearBtn.disabled = false;
     }
+  });
+
+  // ---------------- Map overview ----------------
+
+  let mapInstance = null;
+  let markerClusterGroup = null;
+  let savedGridPhotos = null; // stashes the grid's photo list while a map popup uses the lightbox
+
+  function buildMapPopup(item, index, allItems) {
+    const container = document.createElement("div");
+    container.className = "map-popup";
+
+    const img = document.createElement("img");
+    img.src = `/api/thumbnail?path=${encodeURIComponent(item.path)}&size=200`;
+    img.alt = item.name;
+    container.appendChild(img);
+
+    const name = document.createElement("p");
+    name.className = "map-popup-name";
+    name.textContent = item.name;
+    container.appendChild(name);
+
+    const viewBtn = document.createElement("button");
+    viewBtn.type = "button";
+    viewBtn.textContent = "Bekijk foto";
+    container.appendChild(viewBtn);
+
+    const open = () => {
+      closeMapOverview();
+      savedGridPhotos = currentPhotos;
+      currentPhotos = allItems;
+      openLightbox(index);
+    };
+    img.addEventListener("click", open);
+    viewBtn.addEventListener("click", open);
+
+    return container;
+  }
+
+  async function openMapOverview() {
+    mapOverlay.hidden = false;
+    mapEmptyEl.hidden = true;
+
+    if (!mapInstance) {
+      mapInstance = L.map(mapContainerEl);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(mapInstance);
+    }
+
+    if (markerClusterGroup) {
+      mapInstance.removeLayer(markerClusterGroup);
+    }
+    markerClusterGroup = L.markerClusterGroup();
+
+    try {
+      const res = await fetch("/api/map/photos");
+      const data = await res.json();
+
+      if (!data.items || data.items.length === 0) {
+        mapEmptyEl.hidden = false;
+      } else {
+        data.items.forEach((item, index) => {
+          const marker = L.marker([item.lat, item.lon]);
+          marker.bindPopup(buildMapPopup(item, index, data.items));
+          markerClusterGroup.addLayer(marker);
+        });
+        mapInstance.addLayer(markerClusterGroup);
+        mapInstance.fitBounds(markerClusterGroup.getBounds(), { padding: [40, 40], maxZoom: 15 });
+      }
+    } catch {
+      mapEmptyEl.hidden = false;
+    }
+
+    // The map container was hidden until just now, so Leaflet needs to
+    // recalculate its size now that it's actually visible.
+    setTimeout(() => mapInstance.invalidateSize(), 50);
+  }
+
+  function closeMapOverview() {
+    mapOverlay.hidden = true;
+  }
+
+  mapBtn.addEventListener("click", openMapOverview);
+  mapClose.addEventListener("click", closeMapOverview);
+  mapOverlay.addEventListener("click", (e) => {
+    if (e.target === mapOverlay) closeMapOverview();
   });
 
   // ---------------- Init ----------------

@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="/static/style.css" />
   <script>
     // Apply the theme immediately, before the first render, to avoid a flash
@@ -27,6 +29,7 @@
     <nav class="breadcrumbs" id="breadcrumbs" aria-label="Broodkruimelpad"></nav>
     <div class="topbar-actions">
       <button class="icon-btn" id="favorites-btn" title="Favorieten" aria-label="Favorieten">♥</button>
+      <button class="icon-btn" id="map-btn" title="Kaartoverzicht" aria-label="Kaartoverzicht">⌖</button>
       <button class="icon-btn" id="settings-btn" title="Instellingen" aria-label="Instellingen">⚙</button>
       <button class="icon-btn" id="theme-btn" title="Wissel thema" aria-label="Wissel tussen licht en donker">◐</button>
       <form method="post" action="/logout" class="logout-form">
@@ -96,7 +99,29 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="map-overlay" hidden>
+    <div class="map-card">
+      <div class="map-header">
+        <h2 class="modal-title">Kaartoverzicht</h2>
+        <button class="modal-close" id="map-close" aria-label="Sluit kaartoverzicht">&times;</button>
+      </div>
+      <div class="map-body">
+        <div class="map-container" id="map-container"></div>
+        <div class="map-empty" id="map-empty" hidden>
+          <p class="empty-title">Nog geen foto's met locatie gevonden</p>
+          <p class="empty-sub">
+            Foto's krijgen pas een plek op de kaart zodra ze zijn bekeken of
+            gecached. Ga naar Instellingen en klik op "Cache nu volledig
+            aanmaken" om in één keer al je foto's te controleren op
+            GPS-informatie.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

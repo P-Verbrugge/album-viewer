@@ -137,6 +137,21 @@ zien zonder in te loggen.
   dezelfde inloggegevens. Laat het weten als je losse accounts per persoon
   wilt, dat is goed uit te breiden.
 
+## Kaartoverzicht
+
+De ⌖-knop in de topbalk opent een kaart met daarop al je foto's die een
+GPS-locatie bevatten (geclusterd bij elkaar wanneer je uitzoomt, zodat het
+overzichtelijk blijft bij veel foto's). Klik op een pin (of een cluster om
+in te zoomen) en dan op een foto in de pop-up om 'm direct in de viewer te
+openen.
+
+Een foto krijgt pas een plek op de kaart zodra 'ie een keer is bekeken of
+gecached — de locatie-data wordt namelijk opgebouwd tijdens hetzelfde moment
+dat een thumbnail wordt gemaakt (geen aparte, trage scan van je hele
+bibliotheek nodig). Heb je nog niet veel foto's bekeken, gebruik dan
+"Cache nu volledig aanmaken" in Instellingen om in één keer alles te
+verwerken — daarna is de kaart meteen compleet.
+
 ## Performance bij grote mappen
 
 Mappen met heel veel foto's of submappen direct erin (honderden tot
