@@ -110,6 +110,23 @@ without logging in.
   know if you'd like separate accounts per person; that's a reasonable
   extension to build.
 
+## Slideshow mode
+
+Every photo grid (an album's photos, or your Favorites) shows a "▶ Start
+slideshow" button. Click it to open the viewer and automatically advance
+through the photos — it loops back to the start once it reaches the end.
+
+- **Interval**: pick 3s / 5s / 8s / 15s / 30s from the dropdown in the
+  viewer's toolbar. Your choice is remembered for next time.
+- **Fullscreen**: the ⛶ button makes the viewer take up the whole screen —
+  handy when showing photos on a TV.
+- **Auto-hiding controls**: while playing, the buttons and counter fade out
+  after a few seconds of no activity (like a video player), and reappear as
+  soon as you move the mouse or tap the screen.
+- You can still navigate manually with the arrow keys or by clicking
+  prev/next while a slideshow is running — it just continues counting down
+  from wherever you land. Space bar toggles play/pause.
+
 ## Performance with large folders
 
 Folders with a huge number of photos or subfolders directly inside them

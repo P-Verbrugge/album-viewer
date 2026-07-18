@@ -393,6 +393,7 @@ main {
   top: 1.25rem;
   right: 4.5rem;
   display: flex;
+  align-items: center;
   gap: 0.4rem;
 }
 
@@ -409,6 +410,17 @@ main {
   color: #ff5d5d;
 }
 
+.lb-interval-select {
+  background: rgba(0, 0, 0, 0.45);
+  color: #f2f0ec;
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding: 0.35rem 0.4rem;
+  cursor: pointer;
+}
+
 .lb-counter {
   position: absolute;
   left: 1.5rem;
@@ -417,6 +429,40 @@ main {
   font-size: 0.85rem;
   color: #e8a33d;
   letter-spacing: 0.05em;
+}
+
+/* During slideshow playback, controls fade out after a few seconds of
+   inactivity (like a video player) and reappear on mouse movement/touch. */
+.lightbox .lb-close,
+.lightbox .lb-nav,
+.lightbox .lb-toolbar,
+.lightbox .lb-counter {
+  transition: opacity 0.3s ease;
+  opacity: 1;
+}
+
+.lightbox.controls-hidden .lb-close,
+.lightbox.controls-hidden .lb-nav,
+.lightbox.controls-hidden .lb-toolbar,
+.lightbox.controls-hidden .lb-counter {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lightbox.controls-hidden {
+  cursor: none;
+}
+
+/* ---------- Grid toolbar (e.g. "start slideshow") ---------- */
+
+.grid-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.grid-toolbar[hidden] {
+  display: none;
 }
 
 /* ---------- Info panel (EXIF + map) ---------- */

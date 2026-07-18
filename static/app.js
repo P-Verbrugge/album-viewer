@@ -35,6 +35,11 @@
   const lbNext = document.getElementById("lb-next");
   const lbFavBtn = document.getElementById("lb-fav-btn");
   const lbInfoBtn = document.getElementById("lb-info-btn");
+  const lbPlayBtn = document.getElementById("lb-play-btn");
+  const lbFullscreenBtn = document.getElementById("lb-fullscreen-btn");
+  const lbIntervalSelect = document.getElementById("lb-interval-select");
+  const gridToolbar = document.getElementById("grid-toolbar");
+  const startSlideshowBtn = document.getElementById("start-slideshow-btn");
 
   const infoPanel = document.getElementById("info-panel");
   const infoClose = document.getElementById("info-close");
@@ -191,6 +196,7 @@
     emptyState.hidden = true;
     currentPhotos = [];
     teardownInfiniteScroll();
+    gridToolbar.hidden = true;
 
     currentBrowsePath = data.path;
     currentOffset = data.items.length;
@@ -203,6 +209,7 @@
       if (data.items.length === 0 && data.path === FAVORITES_PATH) {
         showEmpty("Nog geen favorieten", "Klik op het hartje bij een foto om 'm hier te laten verschijnen.");
       } else {
+        gridToolbar.hidden = data.items.length === 0;
         data.items.forEach((item, i) => grid.appendChild(photoTile(item, i)));
       }
     } else {
@@ -361,12 +368,21 @@
     if (!infoPanel.hidden) {
       loadExifInto(photo.path);
     }
+
+    if (slideshowPlaying) {
+      restartSlideshowTimer();
+    }
   }
 
   function closeLightbox() {
     lightbox.hidden = true;
     lbImage.src = "";
     infoPanel.hidden = true;
+    stopSlideshow();
+    lightbox.classList.remove("controls-hidden");
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
     if (savedGridPhotos !== null) {
       currentPhotos = savedGridPhotos;
       savedGridPhotos = null;
@@ -429,6 +445,11 @@
     }
     if (e.key === "ArrowRight") showNext();
     if (e.key === "ArrowLeft") showPrev();
+    if (e.key === " " && !["SELECT", "INPUT", "BUTTON", "TEXTAREA"].includes(e.target.tagName)) {
+      e.preventDefault(); // don't let the page scroll
+      if (slideshowPlaying) stopSlideshow();
+      else startSlideshow();
+    }
   });
 
   // ---------------- EXIF / info panel ----------------
@@ -707,6 +728,93 @@
   mapClose.addEventListener("click", closeMapOverview);
   mapOverlay.addEventListener("click", (e) => {
     if (e.target === mapOverlay) closeMapOverview();
+  });
+
+  // ---------------- Slideshow ----------------
+
+  let slideshowPlaying = false;
+  let slideshowTimer = null;
+  let controlsHideTimer = null;
+
+  // Restore the viewer's last-chosen interval (a personal browser preference,
+  // not something that needs to be shared between visitors).
+  const savedInterval = localStorage.getItem("album-slideshow-interval");
+  if (savedInterval) lbIntervalSelect.value = savedInterval;
+
+  function currentIntervalMs() {
+    return parseInt(lbIntervalSelect.value, 10) || 5000;
+  }
+
+  lbIntervalSelect.addEventListener("change", () => {
+    localStorage.setItem("album-slideshow-interval", lbIntervalSelect.value);
+    if (slideshowPlaying) restartSlideshowTimer();
+  });
+  // Prevent a click on the dropdown from bubbling up to the backdrop-click handler.
+  lbIntervalSelect.addEventListener("click", (e) => e.stopPropagation());
+
+  function restartSlideshowTimer() {
+    clearTimeout(slideshowTimer);
+    slideshowTimer = setTimeout(() => {
+      currentPhotoIndex = (currentPhotoIndex + 1) % currentPhotos.length;
+      showCurrentPhoto();
+    }, currentIntervalMs());
+  }
+
+  function startSlideshow() {
+    if (currentPhotos.length === 0) return;
+    slideshowPlaying = true;
+    lbPlayBtn.textContent = "⏸";
+    lbPlayBtn.setAttribute("aria-label", "Pauzeren");
+    restartSlideshowTimer();
+    scheduleHideControls();
+  }
+
+  function stopSlideshow() {
+    slideshowPlaying = false;
+    lbPlayBtn.textContent = "▶";
+    lbPlayBtn.setAttribute("aria-label", "Diavoorstelling starten");
+    clearTimeout(slideshowTimer);
+    showControls();
+  }
+
+  function showControls() {
+    lightbox.classList.remove("controls-hidden");
+    clearTimeout(controlsHideTimer);
+    if (slideshowPlaying) scheduleHideControls();
+  }
+
+  function scheduleHideControls() {
+    clearTimeout(controlsHideTimer);
+    controlsHideTimer = setTimeout(() => {
+      lightbox.classList.add("controls-hidden");
+    }, 3000);
+  }
+
+  lbPlayBtn.addEventListener("click", () => {
+    if (slideshowPlaying) stopSlideshow();
+    else startSlideshow();
+  });
+
+  lbFullscreenBtn.addEventListener("click", () => {
+    if (!document.fullscreenElement) {
+      lightbox.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  });
+
+  // Reveal controls again on movement/touch — like a video player.
+  lightbox.addEventListener("mousemove", () => {
+    if (!lightbox.hidden) showControls();
+  });
+  lightbox.addEventListener("touchstart", () => {
+    if (!lightbox.hidden) showControls();
+  });
+
+  startSlideshowBtn.addEventListener("click", () => {
+    if (currentPhotos.length === 0) return;
+    openLightbox(0);
+    startSlideshow();
   });
 
   // ---------------- Init ----------------
