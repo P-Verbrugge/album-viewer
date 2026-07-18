@@ -110,6 +110,24 @@ without logging in.
   know if you'd like separate accounts per person; that's a reasonable
   extension to build.
 
+## Downloading
+
+- **A single photo**: the ⬇ button in the viewer downloads the **original
+  file** — never the display-converted JPEG used for HEIC previews, so you
+  always get full quality and metadata.
+- **A whole album as a zip**: the "⬇ Album downloaden" button (next to the
+  slideshow button) zips every photo in the current view. On an album that
+  has sub-albums (e.g. "Italy" with year folders inside), this grabs
+  **everything recursively**, keeping the folder structure inside the zip.
+- **Favorites as a zip**: the same button appears on the Favorites overview
+  and zips all your favorited photos, regardless of which folders they're
+  actually in.
+
+Zips are generated on the fly and cleaned up right after sending — nothing
+lingers on disk. Very large selections (over 3000 photos in one go) are
+rejected with a clear message asking you to download a smaller (sub)folder
+instead, to keep the server responsive.
+
 ## Slideshow mode
 
 Every photo grid (an album's photos, or your Favorites) shows a "▶ Start

@@ -37,9 +37,11 @@
   const lbInfoBtn = document.getElementById("lb-info-btn");
   const lbPlayBtn = document.getElementById("lb-play-btn");
   const lbFullscreenBtn = document.getElementById("lb-fullscreen-btn");
+  const lbDownloadBtn = document.getElementById("lb-download-btn");
   const lbIntervalSelect = document.getElementById("lb-interval-select");
   const gridToolbar = document.getElementById("grid-toolbar");
   const startSlideshowBtn = document.getElementById("start-slideshow-btn");
+  const downloadZipBtn = document.getElementById("download-zip-btn");
 
   const infoPanel = document.getElementById("info-panel");
   const infoClose = document.getElementById("info-close");
@@ -197,12 +199,16 @@
     currentPhotos = [];
     teardownInfiniteScroll();
     gridToolbar.hidden = true;
+    startSlideshowBtn.hidden = true;
 
     currentBrowsePath = data.path;
     currentOffset = data.items.length;
     hasMore = !!data.has_more;
 
     if (data.type === "folders") {
+      // Backend only returns type "folders" when there is at least one
+      // subfolder, so downloading the whole tree always makes sense here.
+      gridToolbar.hidden = false;
       data.items.forEach((item) => grid.appendChild(folderTile(item)));
     } else if (data.type === "photos") {
       currentPhotos = data.items.slice();
@@ -210,6 +216,7 @@
         showEmpty("Nog geen favorieten", "Klik op het hartje bij een foto om 'm hier te laten verschijnen.");
       } else {
         gridToolbar.hidden = data.items.length === 0;
+        startSlideshowBtn.hidden = data.items.length === 0;
         data.items.forEach((item, i) => grid.appendChild(photoTile(item, i)));
       }
     } else {
@@ -815,6 +822,49 @@
     if (currentPhotos.length === 0) return;
     openLightbox(0);
     startSlideshow();
+  });
+
+  // ---------------- Downloads ----------------
+
+  async function triggerDownload(url, button) {
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = button === downloadZipBtn ? "Bezig met inpakken..." : button.textContent;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        showToast("Downloaden mislukt.");
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : "download";
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      showToast("Downloaden mislukt.");
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
+  lbDownloadBtn.addEventListener("click", () => {
+    const photo = currentPhotos[currentPhotoIndex];
+    if (!photo) return;
+    triggerDownload(`/api/download/photo?path=${encodeURIComponent(photo.path)}`, lbDownloadBtn);
+  });
+
+  downloadZipBtn.addEventListener("click", () => {
+    triggerDownload(`/api/download/zip?path=${encodeURIComponent(currentBrowsePath)}`, downloadZipBtn);
   });
 
   // ---------------- Init ----------------
