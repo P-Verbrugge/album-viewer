@@ -1,179 +1,180 @@
 # Album Viewer
 
-Een eigen, lichte albumviewer die op je eigen mapstructuur draait — geen Immich
-of andere fotobeheer-software nodig. Werkt zoals Synology Photos:
+A self-hosted, lightweight album viewer that runs on your own folder
+structure — no Immich or other photo-management software required. Works
+like Synology Photos:
 
-- Startscherm toont je hoofdmappen als albums (met een omslagfoto).
-- Zitten er submappen in een album? Dan zie je die submappen (weer als tegels).
-- Zitten er geen submappen meer in, maar wel foto's? Dan zie je de foto's,
-  en kun je erop klikken voor een volledige weergave met pijltjestoetsen-navigatie.
+- The home screen shows your top-level folders as albums (with a cover photo).
+- Does an album contain subfolders? Then you see those subfolders (again as tiles).
+- No more subfolders, but photos? Then you see the photos themselves, and can
+  click one for a full-size view with arrow-key navigation.
 
-## Snel starten
+## Quick start
 
-1. Pas in `docker-compose.yml` het pad `/pad/naar/jouw/fotos` aan naar de map
-   op je host-systeem met je foto's.
-2. Start de container:
-
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. Open `http://<jouw-server>:8080` in je browser.
-
-## Configuratie
-
-Via omgevingsvariabelen (zie `docker-compose.yml`):
-
-| Variabele     | Betekenis                                    | Default   |
-|---------------|-----------------------------------------------|-----------|
-| `PHOTOS_ROOT` | Map in de container met je foto's             | `/photos` |
-| `CACHE_DIR`   | Map waar thumbnails gecached worden           | `/cache`  |
-| `THUMB_SIZE`  | Standaard thumbnail-breedte in pixels          | `400`     |
-
-De foto's worden **read-only** gemount (`:ro`), dus de app kan nooit iets op je
-schijf wijzigen of verwijderen.
-
-## Hoe een map wordt getoond
-
-Voor elke map geldt, in deze volgorde:
-
-1. **Bevat de map submappen?** Toon die submappen als album-tegels (elk met
-   een omslagfoto: de eerste gevonden foto, tot 3 niveaus diep gezocht).
-2. **Geen submappen, maar wel foto's?** Toon de foto's zelf, als grid.
-3. **Beide leeg?** Toon een lege staat.
-
-Let op: als een map zowel submappen áls losse foto's direct bevat, worden
-volgens deze logica alleen de submappen getoond (de losse foto's in die map
-blijven dan onzichtbaar, tenzij je ze in een submap zet). Laat het weten als
-je liever hebt dat beide tegelijk getoond worden — dat is een kleine aanpassing.
-
-- **Instellingen** (⚙-icoon rechtsboven): laat zien hoeveel foto's al een
-  thumbnail hebben en hoeveel ruimte de cache inneemt. Met **"Cache nu
-  volledig aanmaken"** worden alle foto's in de bibliotheek in één keer
-  verwerkt (met een voortgangsbalk), zodat je nooit meer hoeft te wachten
-  tijdens het bladeren. Met **"Cache legen"** verwijder je alle gegenereerde
-  thumbnails weer (bijv. als je opnieuw wilt beginnen na veel wijzigingen in
-  je fotomap) — je favorieten blijven daarbij gewoon bewaard.
-
-## Nieuwe features
-
-- **Licht/donker thema**: knop rechtsboven (◐). Voorkeur wordt onthouden in je
-  browser. De foto-viewer zelf blijft altijd donker, dat is bewust — zo blijft
-  de foto het middelpunt zonder afleiding van een felle achtergrond.
-- **Favorieten**: klik op het hartje op een foto-tegel of in de viewer. Favorieten
-  worden server-side opgeslagen (in `CACHE_DIR/favorites.json`, dus bewaard in
-  het `album-viewer-cache` volume) en zijn dus voor iedereen zichtbaar die de
-  app bezoekt. Klik op het hartje-icoon rechtsboven in de topbalk voor een
-  overzicht van al je favorieten.
-- **EXIF-informatie**: klik op het ⓘ-icoon in de foto-viewer voor camera, lens,
-  sluitertijd, diafragma, ISO, brandpuntsafstand en opnamedatum (voor zover
-  aanwezig in het bestand). Staat er GPS-locatie in de foto, dan verschijnt er
-  ook een kaartje (via OpenStreetMap). Let op: voor het kaartje moet de browser
-  van de kijker internettoegang hebben (de kaarttegels komen van
-  openstreetmap.org) — de server zelf hoeft niets extra's te doen.
-
-## Bouwen vanaf GitHub (geen handmatige bestandskopieën meer)
-
-Je kunt Docker de code rechtstreeks van GitHub laten ophalen bij het bouwen,
-in plaats van bestanden handmatig naar je TrueNAS-server te kopiëren.
-
-1. Zet de projectmap in een eigen GitHub-repository (zie `.gitignore`).
-2. Zet in `docker-compose.yml` de `build:`-sectie op Optie B (zie de
-   commentaarregels in dat bestand) en vul je eigen GitHub-URL in.
-3. Op TrueNAS heb je dan alleen nog `docker-compose.yml` nodig — plaats dat
-   ene bestand in bijv. `/mnt/JePool/apps/photo-album-app/` en run:
+1. In `docker-compose.yml`, change the path `/path/to/your/photos` to the
+   folder on your host system that contains your photos.
+2. Start the container:
 
    ```bash
    docker compose up -d --build
    ```
 
-   Docker kloont de repo intern (via BuildKit) en bouwt de image — je hoeft
-   zelf nooit `git clone` te draaien.
+3. Open `http://<your-server>:8080` in your browser.
 
-### Updaten na een codewijziging
+## Configuration
+
+Via environment variables (see `docker-compose.yml`):
+
+| Variable      | Meaning                                        | Default   |
+|---------------|-------------------------------------------------|-----------|
+| `PHOTOS_ROOT` | Folder inside the container with your photos     | `/photos` |
+| `CACHE_DIR`   | Folder where thumbnails/app data are cached      | `/cache`  |
+| `THUMB_SIZE`  | Default thumbnail width in pixels                 | `400`     |
+
+Photos are mounted **read-only** (`:ro`), so the app can never modify or
+delete anything on your disk.
+
+## How a folder is displayed
+
+For every folder, in this order:
+
+1. **Does the folder contain subfolders?** Show those subfolders as album
+   tiles (each with a cover photo: the first photo found, searched up to 3
+   levels deep).
+2. **No subfolders, but photos?** Show the photos themselves, as a grid.
+3. **Both empty?** Show an empty state.
+
+Note: if a folder contains both subfolders *and* loose photos directly, this
+logic only shows the subfolders (the loose photos in that folder stay
+hidden, unless you move them into a subfolder). Let me know if you'd rather
+have both shown at once — that's a small change.
+
+## Settings
+
+The ⚙ icon (top right) shows how many photos already have a thumbnail and
+how much space the cache takes up. **"Cache nu volledig aanmaken"** ("Build
+full cache now") processes every photo in the library in one go (with a
+progress bar), so you never have to wait while browsing. **"Cache legen"**
+("Clear cache") removes all generated thumbnails again (e.g. if you want a
+clean start after a lot of changes to your photo folder) — your favorites
+are kept regardless.
+
+## Features
+
+- **Light/dark theme**: button top right (◐). Preference is remembered in
+  your browser. The photo viewer itself always stays dark — that's
+  intentional, so the photo stays the focus without a bright background
+  competing for attention.
+- **Favorites**: click the heart on a photo tile or in the viewer. Favorites
+  are stored server-side (in `CACHE_DIR/favorites.json`, so they persist in
+  the `album-viewer-cache` volume) and are therefore visible to everyone who
+  visits the app. Click the heart icon top right in the toolbar for an
+  overview of all your favorites.
+- **EXIF info**: click the ⓘ icon in the photo viewer for camera, lens,
+  shutter speed, aperture, ISO, focal length, and date taken (as far as
+  present in the file). If the photo has a GPS location, a small map (via
+  OpenStreetMap) appears too. Note: for the map, the viewer's browser needs
+  internet access (map tiles come from openstreetmap.org) — the server
+  itself doesn't need anything extra.
+- **Map overview**: the ⌖ button in the toolbar opens a map with all photos
+  that have a GPS location (clustered together when zoomed out, so it stays
+  readable with lots of photos). Click a pin (or a cluster to zoom in), then
+  click a photo in the popup to open it directly in the viewer.
+
+  A photo only gets a spot on the map once it has been viewed or cached —
+  the location data is built up at the same moment a thumbnail is
+  generated (no separate, slow scan of your whole library needed). If you
+  haven't viewed many photos yet, use "Cache nu volledig aanmaken" in
+  Settings to process everything at once — after that the map will be
+  complete right away.
+
+## Login
+
+The app is now protected by a user account — nobody can see the albums
+without logging in.
+
+- **First time opening**: you'll see a "Create account" screen. Choose your
+  own username and password (at least 6 characters). This is stored locally
+  (the password always hashed, never in plain text) in
+  `CACHE_DIR/account.json` — so in the `album-viewer-cache` volume, and it
+  therefore survives a container restart.
+- **After that**: everyone who visits the app gets a login screen and needs
+  this one account.
+- **Forgot your password / want a clean start**: delete the `account.json`
+  file from the cache, and the "Create account" screen will appear again:
+  ```bash
+  docker exec -it album-viewer rm -f /cache/account.json
+  ```
+- Only **one account** is currently supported (no separate usernames per
+  family member) — everyone who needs access shares the same login. Let me
+  know if you'd like separate accounts per person; that's a reasonable
+  extension to build.
+
+## Performance with large folders
+
+Folders with a huge number of photos or subfolders directly inside them
+(hundreds to thousands) are no longer loaded all at once. The server sends
+them in pages of 300 items, and the app automatically loads the next page
+as you scroll toward the bottom of the screen ("infinite scroll") — you
+normally won't notice this at all, except that browsing large albums stays
+smooth instead of building thousands of tiles at once.
+
+## Building from GitHub (no more manual file copying)
+
+You can have Docker fetch the code directly from GitHub when building,
+instead of manually copying files to your TrueNAS server.
+
+1. Put the project folder in your own GitHub repository (see `.gitignore`).
+2. In `docker-compose.yml`, switch the `build:` section to Option B (see the
+   comment lines in that file) and fill in your own GitHub URL.
+3. On TrueNAS you then only need `docker-compose.yml` — put that one file in
+   e.g. `/mnt/YourPool/apps/photo-album-app/` and run:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+   Docker clones the repo internally (via BuildKit) and builds the image —
+   you never need to run `git clone` yourself.
+
+### Updating after a code change
 
 ```bash
-git add . && git commit -m "wijziging" && git push     # op je eigen PC
+git add . && git commit -m "change" && git push     # on your own PC
 ```
-En dan op TrueNAS:
+And then on TrueNAS:
 ```bash
 docker compose up -d --build
 ```
-Docker haalt bij elke build de laatste commit van de `main`-branch op — een
-`git pull` op TrueNAS zelf is dus niet nodig.
+Docker fetches the latest commit on the `main` branch on every build — a
+`git pull` on TrueNAS itself is not needed.
 
-**Let op — twee dingen om te weten:**
-- **Privé-repository**: dit werkt zo alleen bij een **publieke** repo. Voor
-  een privé-repo moet je een SSH-context of een token in de URL meegeven
-  (`https://<token>@github.com/...`), wat minder wenselijk is om in een
-  compose-bestand te zetten. Voor persoonlijke hobbyprojecten zonder
-  gevoelige data is een publieke repo doorgaans prima.
-- **Build-cache**: als een build merkwaardig genoeg je oude code lijkt te
-  gebruiken, forceer een verse clone met:
+**Two things to keep in mind:**
+- **Private repository**: this only works with a **public** repo as set up
+  here. For a private repo you'd need an SSH context or a token in the URL
+  (`https://<token>@github.com/...`), which isn't ideal to put in a compose
+  file. For a personal hobby project without sensitive data, a public repo
+  is generally fine.
+- **Build cache**: if a build oddly seems to use your old code, force a
+  fresh clone with:
   ```bash
   docker compose build --no-cache && docker compose up -d
   ```
 
-## Inloggen
+## Supported formats
 
-De app is nu afgeschermd met een gebruikersaccount — niemand kan de albums
-zien zonder in te loggen.
+`.jpg .jpeg .png .gif .webp .bmp .tiff .heic .heif`
 
-- **Eerste keer openen**: je krijgt een "Account aanmaken"-scherm te zien.
-  Kies daar zelf een gebruikersnaam en wachtwoord (minimaal 6 tekens). Dit
-  wordt lokaal opgeslagen (het wachtwoord altijd gehasht, nooit in platte
-  tekst) in `CACHE_DIR/account.json` — dus in het `album-viewer-cache`
-  volume, en overleeft dus een herstart van de container.
-- **Daarna**: iedereen die de app bezoekt krijgt een inlogscherm en heeft dit
-  ene account nodig.
-- **Wachtwoord vergeten / opnieuw beginnen**: verwijder het bestand
-  `account.json` uit de cache, dan verschijnt het "Account aanmaken"-scherm
-  weer:
-  ```bash
-  docker exec -it album-viewer rm -f /cache/account.json
-  ```
-- Er is momenteel maar **één account** ondersteund (geen aparte
-  gebruikersnamen per gezinslid) — iedereen die toegang moet hebben, deelt
-  dezelfde inloggegevens. Laat het weten als je losse accounts per persoon
-  wilt, dat is goed uit te breiden.
+HEIC/HEIF (the format iPhones use) is supported via the `pillow-heif`
+package in `requirements.txt`. Thumbnails and the full-size view are both
+automatically converted to JPEG, since no mainstream browser besides Safari
+can display HEIC directly.
 
-## Kaartoverzicht
-
-De ⌖-knop in de topbalk opent een kaart met daarop al je foto's die een
-GPS-locatie bevatten (geclusterd bij elkaar wanneer je uitzoomt, zodat het
-overzichtelijk blijft bij veel foto's). Klik op een pin (of een cluster om
-in te zoomen) en dan op een foto in de pop-up om 'm direct in de viewer te
-openen.
-
-Een foto krijgt pas een plek op de kaart zodra 'ie een keer is bekeken of
-gecached — de locatie-data wordt namelijk opgebouwd tijdens hetzelfde moment
-dat een thumbnail wordt gemaakt (geen aparte, trage scan van je hele
-bibliotheek nodig). Heb je nog niet veel foto's bekeken, gebruik dan
-"Cache nu volledig aanmaken" in Instellingen om in één keer alles te
-verwerken — daarna is de kaart meteen compleet.
-
-## Performance bij grote mappen
-
-Mappen met heel veel foto's of submappen direct erin (honderden tot
-duizenden) worden niet meer in één keer geladen. De server stuurt ze in
-pagina's van 300 items, en de app laadt vanzelf een volgende pagina zodra je
-richting de onderkant van het scherm scrolt ("infinite scroll") — je merkt
-hier normaal niets van, behalve dat bladeren door grote albums nu vlot blijft
-in plaats van in één keer duizenden tegels tegelijk op te bouwen.
-
-## Ondersteunde formaten
-
-`.jpg .jpeg .png .gif .webp .bmp .tiff .heic`
-
-(HEIC-bestanden worden gedetecteerd, maar Pillow kan ze zonder extra plugin
-niet altijd openen — laat het weten als je veel iPhone-foto's in HEIC hebt,
-dan voeg ik `pillow-heif` toe.)
-
-## Zonder Docker draaien (lokaal testen)
+## Running without Docker (local testing)
 
 ```bash
 pip install -r requirements.txt
-PHOTOS_ROOT=/pad/naar/fotos CACHE_DIR=/tmp/album-cache python app.py
+PHOTOS_ROOT=/path/to/photos CACHE_DIR=/tmp/album-cache python app.py
 ```
 
-Dan is de app bereikbaar op `http://localhost:8080`.
+The app is then reachable at `http://localhost:8080`.
