@@ -709,8 +709,12 @@
     container.className = "map-popup";
 
     const img = document.createElement("img");
-    img.src = `/api/thumbnail?path=${encodeURIComponent(item.path)}&size=200`;
     img.alt = item.name;
+    // No src here on purpose — see the popupopen handler below, where the
+    // marker loading is wired up. Setting .src fires the request immediately
+    // regardless of visibility, so doing it here for every marker at once
+    // would blast out one request per geotagged photo the moment the map
+    // opens.
     container.appendChild(img);
 
     const name = document.createElement("p");
@@ -732,7 +736,7 @@
     img.addEventListener("click", open);
     viewBtn.addEventListener("click", open);
 
-    return container;
+    return { container, img };
   }
 
   async function openMapOverview() {
@@ -761,7 +765,13 @@
       } else {
         data.items.forEach((item, index) => {
           const marker = L.marker([item.lat, item.lon]);
-          marker.bindPopup(buildMapPopup(item, index, data.items));
+          const { container, img } = buildMapPopup(item, index, data.items);
+          marker.bindPopup(container);
+          marker.on("popupopen", () => {
+            if (!img.src) {
+              img.src = `/api/thumbnail?path=${encodeURIComponent(item.path)}&size=200`;
+            }
+          });
           markerClusterGroup.addLayer(marker);
         });
         mapInstance.addLayer(markerClusterGroup);

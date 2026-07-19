@@ -88,6 +88,12 @@ are kept regardless.
   Settings to process everything at once — after that the map will be
   complete right away.
 
+  Popup thumbnails load on demand, one at a time, only once you actually
+  open that pin's popup — not all at once when the map opens. With a lot of
+  geotagged photos, loading every thumbnail up front would hammer the
+  server with requests and often show blank/broken images while they're
+  still competing to load.
+
 ## Login
 
 The app is now protected by a user account — nobody can see the albums
