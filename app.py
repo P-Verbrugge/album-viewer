@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import secrets
+import subprocess
 import tempfile
 import threading
 import time
@@ -71,6 +72,14 @@ SECRET_KEY_FILE = CACHE_DIR / "secret_key.txt"
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".heif"}
 HEIF_EXTS = {".heic", ".heif"}  # no browser can display these formats directly
+VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".avi", ".webm"}
+VIDEO_MIME_TYPES = {
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".mov": "video/quicktime",
+    ".avi": "video/x-msvideo",
+    ".webm": "video/webm",
+}
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -213,15 +222,23 @@ def is_image(path: Path) -> bool:
     return path.suffix.lower() in IMAGE_EXTS and not path.name.startswith(".")
 
 
+def is_video(path: Path) -> bool:
+    return path.suffix.lower() in VIDEO_EXTS and not path.name.startswith(".")
+
+
+def is_media(path: Path) -> bool:
+    return is_image(path) or is_video(path)
+
+
 def find_cover(dir_path: Path, max_depth: int = COVER_SEARCH_DEPTH):
-    """Finds the first photo (alphabetically, shallowest first) under
-    dir_path, so an album tile can show a preview photo."""
+    """Finds the first photo or video (alphabetically, shallowest first)
+    under dir_path, so an album tile can show a preview thumbnail."""
     try:
         entries = sorted(dir_path.iterdir(), key=lambda p: p.name.lower())
     except PermissionError:
         return None
 
-    files = [p for p in entries if p.is_file() and is_image(p)]
+    files = [p for p in entries if p.is_file() and is_media(p)]
     if files:
         return files[0]
 
@@ -365,8 +382,15 @@ def browse():
         items = []
         for fav_path in page_favs:
             abs_p = PHOTOS_ROOT / fav_path
-            if abs_p.is_file() and is_image(abs_p):
-                items.append({"name": abs_p.name, "path": fav_path, "favorite": True})
+            if abs_p.is_file() and is_media(abs_p):
+                items.append(
+                    {
+                        "name": abs_p.name,
+                        "path": fav_path,
+                        "favorite": True,
+                        "kind": "video" if is_video(abs_p) else "photo",
+                    }
+                )
         breadcrumbs = [{"name": "Favorieten", "path": FAVORITES_PATH}]
         return jsonify(
             {
@@ -391,7 +415,7 @@ def browse():
         abort(403)
 
     subdirs = [p for p in entries if p.is_dir() and not p.name.startswith(".")]
-    photos = [p for p in entries if p.is_file() and is_image(p)]
+    media_files = [p for p in entries if p.is_file() and is_media(p)]
 
     breadcrumbs = []
     if rel_path.strip("/"):
@@ -425,9 +449,17 @@ def browse():
             }
         )
 
-    if photos:
-        page_photos, total, has_more = paginate(photos, offset, limit)
-        items = [{"name": p.name, "path": rel(p), "favorite": rel(p) in favs} for p in page_photos]
+    if media_files:
+        page_photos, total, has_more = paginate(media_files, offset, limit)
+        items = [
+            {
+                "name": p.name,
+                "path": rel(p),
+                "favorite": rel(p) in favs,
+                "kind": "video" if is_video(p) else "photo",
+            }
+            for p in page_photos
+        ]
         return jsonify(
             {
                 "type": "photos",
@@ -476,6 +508,30 @@ def record_gps(rel_path: str, name: str, mtime: int, gps) -> None:
         save_gps_index(index)
 
 
+def generate_video_thumbnail(abs_path: Path, out_path: Path, size: int) -> None:
+    """Extracts a still frame from a video with ffmpeg to use as its
+    thumbnail. Tries a frame 1 second in first (usually avoids a black
+    opening frame); for very short clips that fails, so it falls back to
+    the very first frame."""
+    for seek in ("00:00:01", "00:00:00"):
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", seek,
+                "-i", str(abs_path),
+                "-frames:v", "1",
+                "-vf", f"scale='min({size},iw)':-2",
+                str(out_path),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+        if out_path.exists() and out_path.stat().st_size > 0:
+            return
+    raise RuntimeError(f"ffmpeg could not extract a thumbnail frame from {abs_path}")
+
+
 def ensure_thumbnail(abs_path: Path, size: int) -> Path:
     """Generates (if needed) a thumbnail and returns the cache file.
     Used by both the /api/thumbnail route and the bulk-cache job.
@@ -483,10 +539,16 @@ def ensure_thumbnail(abs_path: Path, size: int) -> Path:
     While the file is open anyway, this also opportunistically checks
     whether its GPS location has been recorded yet in the GPS index (used
     by the map overview), so browsing/caching photos gradually builds up
-    the map data without a separate full-library scan."""
+    the map data without a separate full-library scan. Videos don't carry
+    GPS the same way, so that check is skipped for them."""
     mtime = int(abs_path.stat().st_mtime)
     cache_key = hashlib.sha1(f"{abs_path}:{mtime}:{size}".encode()).hexdigest()
     cache_file = CACHE_DIR / f"{cache_key}.jpg"
+
+    if is_video(abs_path):
+        if not cache_file.exists():
+            generate_video_thumbnail(abs_path, cache_file, size)
+        return cache_file
 
     normalized = rel(abs_path)
     gps_entry = load_gps_index().get(normalized)
@@ -514,7 +576,7 @@ def thumbnail():
     size = int(request.args.get("size", DEFAULT_THUMB_SIZE))
     abs_path = safe_resolve(rel_path)
 
-    if not abs_path.is_file() or not is_image(abs_path):
+    if not abs_path.is_file() or not is_media(abs_path):
         abort(404)
 
     try:
@@ -537,6 +599,20 @@ def full_image():
         return serve_as_jpeg(abs_path)
 
     return send_file(abs_path)
+
+
+@app.route("/api/video")
+def full_video():
+    rel_path = request.args.get("path", "")
+    abs_path = safe_resolve(rel_path)
+
+    if not abs_path.is_file() or not is_video(abs_path):
+        abort(404)
+
+    mimetype = VIDEO_MIME_TYPES.get(abs_path.suffix.lower(), "application/octet-stream")
+    # conditional=True (Flask's default) makes send_file honor Range
+    # requests, which is what lets the browser seek/scrub through the video.
+    return send_file(abs_path, mimetype=mimetype, conditional=True)
 
 
 def serve_as_jpeg(abs_path: Path):
@@ -570,7 +646,7 @@ def toggle_favorite():
     body = request.get_json(force=True, silent=True) or {}
     abs_path = safe_resolve(body.get("path", ""))
 
-    if not abs_path.is_file() or not is_image(abs_path):
+    if not abs_path.is_file() or not is_media(abs_path):
         abort(404)
 
     normalized = rel(abs_path)
@@ -703,15 +779,15 @@ def download_photo():
     rel_path = request.args.get("path", "")
     abs_path = safe_resolve(rel_path)
 
-    if not abs_path.is_file() or not is_image(abs_path):
+    if not abs_path.is_file() or not is_media(abs_path):
         abort(404)
 
     return send_file(abs_path, as_attachment=True, download_name=abs_path.name)
 
 
 def collect_files_for_zip(rel_path: str) -> list:
-    """Gathers every photo file that belongs to the given path, for zip
-    download: the favorites list, a single leaf album's photos, or an
+    """Gathers every photo/video file that belongs to the given path, for
+    zip download: the favorites list, a single leaf album's items, or an
     album (and all its sub-albums) recursively."""
     if rel_path == FAVORITES_PATH:
         favs = load_favorites()
@@ -719,9 +795,9 @@ def collect_files_for_zip(rel_path: str) -> list:
 
     abs_path = safe_resolve(rel_path)
     if abs_path.is_file():
-        return [abs_path] if is_image(abs_path) else []
+        return [abs_path] if is_media(abs_path) else []
 
-    return sorted(p for p in abs_path.rglob("*") if p.is_file() and is_image(p))
+    return sorted(p for p in abs_path.rglob("*") if p.is_file() and is_media(p))
 
 
 @app.route("/api/download/zip")
@@ -814,7 +890,7 @@ def run_cache_job() -> None:
     write_cache_job(job)
 
     try:
-        all_images = [p for p in PHOTOS_ROOT.rglob("*") if p.is_file() and is_image(p)]
+        all_images = [p for p in PHOTOS_ROOT.rglob("*") if p.is_file() and is_media(p)]
         job["total"] = len(all_images)
         job["message"] = None
         write_cache_job(job)
@@ -840,7 +916,7 @@ def run_cache_job() -> None:
 
 @app.route("/api/cache/info")
 def cache_info():
-    total_images = sum(1 for p in PHOTOS_ROOT.rglob("*") if p.is_file() and is_image(p))
+    total_images = sum(1 for p in PHOTOS_ROOT.rglob("*") if p.is_file() and is_media(p))
     cache_files = list(CACHE_DIR.glob("*.jpg"))
     return jsonify(
         {

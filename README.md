@@ -110,6 +110,29 @@ without logging in.
   know if you'd like separate accounts per person; that's a reasonable
   extension to build.
 
+## Video clips
+
+Short video clips (`.mp4 .mov .m4v .avi .webm`) show up right alongside your
+photos — same grid, same albums, same favorites and downloads. A small ▶
+badge on the tile tells them apart from photos.
+
+- **Thumbnails**: generated with `ffmpeg` (a still frame ~1 second in,
+  falling back to the very first frame for very short clips), cached the
+  same way as photo thumbnails.
+- **Viewer**: clicking a video opens it with normal playback controls
+  (play/pause/volume/seek) — nothing autoplays outside of slideshow mode.
+- **Slideshow mode**: videos advance on the *same fixed interval* as photos
+  rather than playing to completion — they autoplay muted as a moving
+  preview for their slot, then the slideshow just moves on. Let me know if
+  you'd rather have it wait for full playback instead; that's a reasonable
+  follow-up change.
+- **EXIF/map**: videos don't get EXIF info or a spot on the map overview
+  (that's photo-specific metadata) — the info panel just shows the filename
+  for a video.
+- Running without Docker? Make sure `ffmpeg` is installed on your system
+  (`apt install ffmpeg` / `brew install ffmpeg`) — the Docker image already
+  includes it.
+
 ## Downloading
 
 - **A single photo**: the ⬇ button in the viewer downloads the **original
@@ -198,7 +221,8 @@ Docker fetches the latest commit on the `main` branch on every build — a
 
 ## Supported formats
 
-`.jpg .jpeg .png .gif .webp .bmp .tiff .heic .heif`
+Photos: `.jpg .jpeg .png .gif .webp .bmp .tiff .heic .heif`
+Videos: `.mp4 .mov .m4v .avi .webm`
 
 HEIC/HEIF (the format iPhones use) is supported via the `pillow-heif`
 package in `requirements.txt`. Thumbnails and the full-size view are both

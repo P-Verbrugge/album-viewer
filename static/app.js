@@ -29,6 +29,7 @@
 
   const lightbox = document.getElementById("lightbox");
   const lbImage = document.getElementById("lb-image");
+  const lbVideo = document.getElementById("lb-video");
   const lbCounter = document.getElementById("lb-counter");
   const lbClose = document.getElementById("lb-close");
   const lbPrev = document.getElementById("lb-prev");
@@ -272,6 +273,13 @@
     img.alt = item.name;
     tile.appendChild(img);
 
+    if (item.kind === "video") {
+      const badge = document.createElement("span");
+      badge.className = "video-badge";
+      badge.textContent = "▶";
+      tile.appendChild(badge);
+    }
+
     const favBtn = document.createElement("button");
     favBtn.className = "tile-fav-btn" + (item.favorite ? " active" : "");
     favBtn.textContent = item.favorite ? "♥" : "♡";
@@ -367,13 +375,40 @@
 
   function showCurrentPhoto() {
     const photo = currentPhotos[currentPhotoIndex];
-    lbImage.src = `/api/image?path=${encodeURIComponent(photo.path)}`;
-    lbImage.alt = photo.name;
+    const isVideo = photo.kind === "video";
+
+    // Always stop and detach any previously playing video first.
+    lbVideo.pause();
+    lbVideo.removeAttribute("src");
+    lbVideo.load();
+
+    if (isVideo) {
+      lbImage.hidden = true;
+      lbVideo.hidden = false;
+      lbVideo.src = `/api/video?path=${encodeURIComponent(photo.path)}`;
+      // During a slideshow the video just plays muted as a moving preview
+      // for its slot; outside a slideshow you get full manual controls.
+      lbVideo.muted = slideshowPlaying;
+      lbVideo.controls = !slideshowPlaying;
+      if (slideshowPlaying) {
+        lbVideo.play().catch(() => {});
+      }
+    } else {
+      lbVideo.hidden = true;
+      lbImage.hidden = false;
+      lbImage.src = `/api/image?path=${encodeURIComponent(photo.path)}`;
+      lbImage.alt = photo.name;
+    }
+
     lbCounter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
     lbFavBtn.classList.toggle("active", !!photo.favorite);
 
     if (!infoPanel.hidden) {
-      loadExifInto(photo.path);
+      if (isVideo) {
+        showVideoInfo(photo);
+      } else {
+        loadExifInto(photo.path);
+      }
     }
 
     if (slideshowPlaying) {
@@ -381,9 +416,19 @@
     }
   }
 
+  function showVideoInfo(photo) {
+    infoFilename.textContent = photo.name;
+    infoList.innerHTML = "";
+    addInfoRow("Type", "Video");
+    infoMapEl.hidden = true;
+  }
+
   function closeLightbox() {
     lightbox.hidden = true;
     lbImage.src = "";
+    lbVideo.pause();
+    lbVideo.removeAttribute("src");
+    lbVideo.load();
     infoPanel.hidden = true;
     stopSlideshow();
     lightbox.classList.remove("controls-hidden");
@@ -423,7 +468,11 @@
     if (!photo) return;
     if (infoPanel.hidden) {
       infoPanel.hidden = false;
-      loadExifInto(photo.path);
+      if (photo.kind === "video") {
+        showVideoInfo(photo);
+      } else {
+        loadExifInto(photo.path);
+      }
     } else {
       infoPanel.hidden = true;
     }

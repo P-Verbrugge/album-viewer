@@ -242,6 +242,24 @@ main {
   color: #f2f0ec; /* stays light even in the light theme: this sits on top of the photo */
 }
 
+.video-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #f2f0ec;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .tile-fav-btn {
   position: absolute;
   top: 0.4rem;
