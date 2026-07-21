@@ -235,6 +235,31 @@ package in `requirements.txt`. Thumbnails and the full-size view are both
 automatically converted to JPEG, since no mainstream browser besides Safari
 can display HEIC directly.
 
+## Project structure
+
+```
+photo-album-app/
+├── app.py                 # thin entry point (creates the app via album_app.create_app())
+├── album_app/
+│   ├── __init__.py        # application factory: wires up sessions + all blueprints
+│   ├── config.py          # env vars, paths, file-type constants
+│   ├── exif_utils.py      # pure EXIF-parsing helpers
+│   ├── media.py           # path safety, file-type checks, thumbnails, GPS index
+│   ├── auth.py            # account storage, /setup, /login, /logout, login guard
+│   ├── pages.py           # "/" — the single-page-app shell
+│   ├── browse.py          # /api/browse — folders/photos + pagination
+│   ├── media_routes.py    # /api/thumbnail, /api/image, /api/video
+│   ├── favorites.py       # /api/favorites/toggle
+│   ├── exif_routes.py     # /api/exif
+│   ├── gps_map.py         # /api/map/photos
+│   ├── downloads.py       # /api/download/photo, /api/download/zip
+│   └── cache_job.py       # bulk-cache background job + /api/cache/*
+├── templates/              # index.html, login.html, setup.html
+└── static/
+    ├── style.css
+    └── js/                 # ES modules — see static/js/main.js for the module map
+```
+
 ## Running without Docker (local testing)
 
 ```bash

@@ -1,25 +1,25 @@
 services:
   album-viewer:
-    # Optie A — lokaal bouwen vanuit deze map (standaard):
+    # Option A — build locally from this folder (default):
     build: .
 
-    # Optie B — rechtstreeks vanaf GitHub bouwen, dan hoef je nooit meer
-    # bestanden handmatig naar TrueNAS te kopiëren. Vervang Optie A hierboven
-    # door onderstaande (en pas de URL aan naar jouw eigen repo):
+    # Option B — build directly from GitHub, so you never have to copy
+    # files to your server manually. Replace Option A above with this (and
+    # fill in your own repo URL):
     #
     # build:
-    #   context: https://github.com/<jouw-gebruikersnaam>/photo-album-app.git#main
+    #   context: https://github.com/<your-username>/photo-album-app.git#main
     #   dockerfile: Dockerfile
     #
-    # Zie README.md voor het volledige "update"-workflow.
+    # See README.md for the full update workflow.
 
     container_name: album-viewer
     ports:
       - "8080:8080"
     volumes:
-      # Pas het linkerpad aan naar de map met jouw foto's op het host-systeem.
-      - /pad/naar/jouw/fotos:/photos:ro
-      # Thumbnail-cache blijft bewaard tussen herstarts.
+      # Change the left-hand path to the folder with your photos on the host.
+      - /path/to/your/photos:/photos:ro
+      # The thumbnail cache persists across restarts.
       - album-viewer-cache:/cache
     environment:
       - PHOTOS_ROOT=/photos

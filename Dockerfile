@@ -25,6 +25,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
+COPY album_app/ album_app/
 COPY templates/ templates/
 COPY static/ static/
 
