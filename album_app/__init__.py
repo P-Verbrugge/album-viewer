@@ -9,14 +9,26 @@ media.py.
 """
 
 from datetime import timedelta
+from pathlib import Path
 
 from flask import Flask
 
 from . import auth, browse, cache_job, downloads, exif_routes, favorites, gps_map, media_routes, pages
 
+# album_app/__init__.py lives one level below the project root, but the
+# templates/ and static/ folders live at the project root (that's also
+# where the Dockerfile COPYs them to). Flask's default root_path would
+# otherwise be this package's own folder, which would make it look for
+# templates/static in the wrong place.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 def create_app() -> Flask:
-    app = Flask(__name__)
+    app = Flask(
+        __name__,
+        template_folder=str(PROJECT_ROOT / "templates"),
+        static_folder=str(PROJECT_ROOT / "static"),
+    )
 
     app.config["SECRET_KEY"] = auth.get_or_create_secret_key()
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
