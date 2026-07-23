@@ -17,7 +17,8 @@ COVER_SEARCH_DEPTH = 3  # how deep we search for a cover photo for an album tile
 FAVORITES_FILE = CACHE_DIR / "favorites.json"
 CACHE_JOB_FILE = CACHE_DIR / "cache_job.json"
 GPS_INDEX_FILE = CACHE_DIR / "gps_index.json"
-ACCOUNT_FILE = CACHE_DIR / "account.json"
+USERS_FILE = CACHE_DIR / "users.json"
+ACCOUNT_FILE = CACHE_DIR / "account.json"  # legacy single-account file, kept only for migration
 SECRET_KEY_FILE = CACHE_DIR / "secret_key.txt"
 
 FAVORITES_PATH = "__favorites__"  # virtual path for the favorites overview
@@ -26,6 +27,8 @@ FAVORITES_PATH = "__favorites__"  # virtual path for the favorites overview
 # the small JSON files above.
 cache_job_lock = threading.Lock()
 gps_index_lock = threading.Lock()
+users_lock = threading.Lock()
+favorites_lock = threading.Lock()
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".heif"}
 HEIF_EXTS = {".heic", ".heif"}  # no browser can display these formats directly

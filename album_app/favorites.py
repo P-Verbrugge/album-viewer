@@ -1,11 +1,11 @@
 """
-Favorites: stored server-side (not per-browser), so they apply to everyone
-visiting the app, regardless of browser/device.
+Favorites: stored server-side, per account, so each person's favorites are
+their own — but still survive across devices/browsers for that one account.
 """
 
 import json
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, jsonify, request, session
 
 from . import config
 from .media import is_media, rel, safe_resolve
@@ -13,19 +13,39 @@ from .media import is_media, rel, safe_resolve
 bp = Blueprint("favorites", __name__)
 
 
-def load_favorites() -> set:
+def _load_all() -> dict:
     try:
-        return set(json.loads(config.FAVORITES_FILE.read_text()))
+        return json.loads(config.FAVORITES_FILE.read_text())
     except Exception:
-        return set()
+        return {}
 
 
-def save_favorites(favs: set) -> None:
-    config.FAVORITES_FILE.write_text(json.dumps(sorted(favs)))
+def _save_all(all_favs: dict) -> None:
+    config.FAVORITES_FILE.write_text(json.dumps(all_favs))
+
+
+def load_favorites(username: str) -> set:
+    return set(_load_all().get(username, []))
+
+
+def save_favorites(username: str, favs: set) -> None:
+    with config.favorites_lock:
+        all_favs = _load_all()
+        all_favs[username] = sorted(favs)
+        _save_all(all_favs)
+
+
+def delete_user_favorites(username: str) -> None:
+    with config.favorites_lock:
+        all_favs = _load_all()
+        if username in all_favs:
+            del all_favs[username]
+            _save_all(all_favs)
 
 
 @bp.route("/api/favorites/toggle", methods=["POST"])
 def toggle_favorite():
+    username = session.get("username")
     body = request.get_json(force=True, silent=True) or {}
     abs_path = safe_resolve(body.get("path", ""))
 
@@ -33,12 +53,12 @@ def toggle_favorite():
         abort(404)
 
     normalized = rel(abs_path)
-    favs = load_favorites()
+    favs = load_favorites(username)
     is_fav = normalized in favs
     if is_fav:
         favs.discard(normalized)
     else:
         favs.add(normalized)
-    save_favorites(favs)
+    save_favorites(username, favs)
 
     return jsonify({"path": normalized, "favorite": not is_fav})

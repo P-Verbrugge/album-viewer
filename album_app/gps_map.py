@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, session
 
 from . import config
 from .favorites import load_favorites
@@ -16,7 +16,7 @@ def map_photos():
     """Returns every photo that has a known GPS location, for the map
     overview. Backed by the GPS index built up in ensure_thumbnail(), so
     this stays fast even for large libraries — no re-scanning of files here."""
-    favs = load_favorites()
+    favs = load_favorites(session.get("username"))
     index = load_gps_index()
 
     items = []
