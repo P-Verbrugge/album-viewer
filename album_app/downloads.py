@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from flask import Blueprint, abort, after_this_request, request, send_file, session
+from flask import Blueprint, abort, after_this_request, request, send_file
 
 from . import config
 from .favorites import load_favorites
@@ -36,7 +36,7 @@ def collect_files_for_zip(rel_path: str) -> list:
     zip download: the favorites list, a single leaf album's items, or an
     album (and all its sub-albums) recursively."""
     if rel_path == config.FAVORITES_PATH:
-        favs = load_favorites(session.get("username"))
+        favs = load_favorites()
         return [config.PHOTOS_ROOT / p for p in sorted(favs) if (config.PHOTOS_ROOT / p).is_file()]
 
     abs_path = safe_resolve(rel_path)

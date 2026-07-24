@@ -66,10 +66,10 @@ are kept regardless.
   intentional, so the photo stays the focus without a bright background
   competing for attention.
 - **Favorites**: click the heart on a photo tile or in the viewer. Favorites
-  are personal to your account (stored server-side in
-  `CACHE_DIR/favorites.json`, so they persist in the `album-viewer-cache`
-  volume) — nobody else sees what you've favorited. Click the heart icon top
-  right in the toolbar for an overview of your favorites.
+  are stored server-side (in `CACHE_DIR/favorites.json`, so they persist in
+  the `album-viewer-cache` volume) and are therefore visible to everyone who
+  visits the app. Click the heart icon top right in the toolbar for an
+  overview of all your favorites.
 - **EXIF info**: click the ⓘ icon in the photo viewer for camera, lens,
   shutter speed, aperture, ISO, focal length, and date taken (as far as
   present in the file). If the photo has a GPS location, a small map (via
@@ -94,41 +94,38 @@ are kept regardless.
   server with requests and often show blank/broken images while they're
   still competing to load.
 
-## Login & user accounts
+## Login
 
-The app is protected by user accounts — nobody can see the albums without
-logging in. Multiple people can each have their own account.
+The app is protected by a single shared account — nobody can see the albums
+without logging in.
 
-- **First time opening**: you'll see a "Create account" screen. The account
-  you create here automatically becomes the **admin** account.
-- **Admin**: open Instellingen (⚙) → **Account** tab to see who's logged in
-  and change your own password. Admins get an extra **Gebruikers** tab to:
-  - add new accounts (optionally as another admin),
-  - reset anyone's password,
-  - promote/demote admins,
-  - delete an account.
-
-  There must always be at least one admin — the app blocks removing the
-  last one, and you can never delete or demote your own account (to avoid
-  accidentally locking yourself out).
-- **Regular (non-admin) accounts** can change their own password (Account
-  tab) but don't see the Gebruikers tab.
-- **Favorites are personal**: each account has its own favorites list —
-  nobody sees anyone else's.
-- **Passwords** are stored locally, always hashed (never in plain text), in
-  `CACHE_DIR/users.json` — so in the `album-viewer-cache` volume, and this
-  survives a container restart.
-- **Locked out entirely** (e.g. forgot the only admin's password and there's
-  no other admin to reset it)? Delete the whole user store to start over
-  with a fresh "Create account" screen:
+- **First time opening**: you'll see a "Create account" screen. Choose your
+  own username and password (at least 6 characters). This is stored locally
+  (the password always hashed, never in plain text) in
+  `CACHE_DIR/account.json` — so in the `album-viewer-cache` volume, and it
+  therefore survives a container restart.
+- **After that**: everyone who visits the app gets a login screen and needs
+  this one shared account.
+- **Forgot your password / want a clean start**: delete the `account.json`
+  file from the cache, and the "Create account" screen will appear again:
   ```bash
-  docker exec -it album-viewer rm -f /cache/users.json
+  docker exec -it album-viewer rm -f /cache/account.json
   ```
-  This removes all accounts (not your photos or favorites files), and the
-  first person to open the app afterwards becomes the new admin.
-- **Upgrading from an older version** (single shared account): your existing
-  login is automatically migrated into the new system as the first admin
-  account the first time the app starts — no action needed, no re-setup.
+- Only **one account** is supported (no separate logins per family member)
+  — everyone who needs access shares the same login.
+
+### Why gunicorn runs with `--preload`
+
+The Dockerfile starts gunicorn with `--preload`. This matters specifically
+for the very first startup on a brand-new, empty cache volume: the app
+generates a random session-signing key and saves it to
+`CACHE_DIR/secret_key.txt` the first time it's needed. Without `--preload`,
+each of gunicorn's worker processes would generate that key independently
+(a race), so a login cookie signed by one worker wouldn't be recognized by
+the other — causing random, seemingly unpredictable "sometimes logged in,
+sometimes not" behavior depending on which worker handled a given request.
+With `--preload`, the app (and that key) is created once, before gunicorn
+forks its workers, so every worker shares the exact same key.
 
 ## Video clips
 
@@ -259,13 +256,11 @@ photo-album-app/
 │   ├── config.py          # env vars, paths, file-type constants
 │   ├── exif_utils.py      # pure EXIF-parsing helpers
 │   ├── media.py           # path safety, file-type checks, thumbnails, GPS index
-│   ├── auth.py            # multi-user store, /setup, /login, /logout, login guard
-│   ├── account_routes.py  # /api/account/me, /api/account/password (self-service)
-│   ├── admin_users.py     # /api/admin/users/* (admin-only user management)
+│   ├── auth.py            # account storage, /setup, /login, /logout, login guard
 │   ├── pages.py           # "/" — the single-page-app shell
 │   ├── browse.py          # /api/browse — folders/photos + pagination
 │   ├── media_routes.py    # /api/thumbnail, /api/image, /api/video
-│   ├── favorites.py       # /api/favorites/toggle (per-account favorites)
+│   ├── favorites.py       # /api/favorites/toggle
 │   ├── exif_routes.py     # /api/exif
 │   ├── gps_map.py         # /api/map/photos
 │   ├── downloads.py       # /api/download/photo, /api/download/zip

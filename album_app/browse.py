@@ -4,7 +4,7 @@ and videos inside a leaf folder — with pagination so huge folders don't get
 sent (or rendered) all in one go.
 """
 
-from flask import Blueprint, abort, jsonify, request, session
+from flask import Blueprint, abort, jsonify, request
 
 from . import config
 from .favorites import load_favorites
@@ -23,7 +23,7 @@ def paginate(items: list, offset: int, limit: int):
 @bp.route("/api/browse")
 def browse():
     rel_path = request.args.get("path", "")
-    favs = load_favorites(session.get("username"))
+    favs = load_favorites()
 
     offset = max(0, request.args.get("offset", default=0, type=int) or 0)
     limit = request.args.get("limit", default=config.DEFAULT_PAGE_SIZE, type=int) or config.DEFAULT_PAGE_SIZE

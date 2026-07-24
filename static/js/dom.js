@@ -49,27 +49,6 @@ export const cacheProgressLabel = document.getElementById("cache-progress-label"
 export const cacheBuildBtn = document.getElementById("cache-build-btn");
 export const cacheClearBtn = document.getElementById("cache-clear-btn");
 
-export const settingsTabs = document.getElementById("settings-tabs");
-export const usersTabBtn = document.getElementById("users-tab-btn");
-export const panelCache = document.getElementById("panel-cache");
-export const panelAccount = document.getElementById("panel-account");
-export const panelUsers = document.getElementById("panel-users");
-
-export const accountInfoText = document.getElementById("account-info-text");
-export const passwordChangeForm = document.getElementById("password-change-form");
-export const currentPasswordInput = document.getElementById("current-password");
-export const newPasswordInput = document.getElementById("new-password");
-export const newPasswordConfirmInput = document.getElementById("new-password-confirm");
-export const passwordChangeError = document.getElementById("password-change-error");
-export const passwordChangeSuccess = document.getElementById("password-change-success");
-
-export const usersList = document.getElementById("users-list");
-export const addUserForm = document.getElementById("add-user-form");
-export const newUsernameInput = document.getElementById("new-username");
-export const newUserPasswordInput = document.getElementById("new-user-password");
-export const newUserAdminInput = document.getElementById("new-user-admin");
-export const addUserError = document.getElementById("add-user-error");
-
 export const mapOverlay = document.getElementById("map-overlay");
 export const mapClose = document.getElementById("map-close");
 export const mapContainerEl = document.getElementById("map-container");
