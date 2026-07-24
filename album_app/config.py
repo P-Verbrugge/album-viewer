@@ -3,6 +3,8 @@ Central configuration: environment variables, on-disk paths, and file-type
 constants shared across the app.
 """
 
+import contextlib
+import fcntl
 import os
 import threading
 from pathlib import Path
@@ -23,12 +25,37 @@ SECRET_KEY_FILE = CACHE_DIR / "secret_key.txt"
 
 FAVORITES_PATH = "__favorites__"  # virtual path for the favorites overview
 
-# Process-local locks (one per gunicorn worker) guarding read-modify-write of
-# the small JSON files above.
+# Process-local locks (kept for in-process callers that don't need the
+# cross-process guarantee below).
 cache_job_lock = threading.Lock()
 gps_index_lock = threading.Lock()
 users_lock = threading.Lock()
 favorites_lock = threading.Lock()
+
+# gunicorn runs multiple *worker processes*, each with its own separate
+# Python memory (and therefore its own separate threading.Lock instances
+# above) — a plain in-process lock does nothing to stop two different
+# worker processes from both reading users.json, both modifying their own
+# in-memory copy, and one overwriting the other's change when they save.
+# fcntl.flock operates at the OS level on the file itself, so it correctly
+# serializes access across *both* threads and separate processes.
+USERS_LOCK_FILE = CACHE_DIR / "users.json.lock"
+FAVORITES_LOCK_FILE = CACHE_DIR / "favorites.json.lock"
+GPS_INDEX_LOCK_FILE = CACHE_DIR / "gps_index.json.lock"
+
+
+@contextlib.contextmanager
+def locked_file(lock_path: Path):
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".heif"}
 HEIF_EXTS = {".heic", ".heif"}  # no browser can display these formats directly

@@ -101,8 +101,10 @@ logging in. Multiple people can each have their own account.
 
 - **First time opening**: you'll see a "Create account" screen. The account
   you create here automatically becomes the **admin**.
-- **Admin**: open Instellingen (⚙) → **Account** tab to see who's logged in
-  and change your own password. Admins get an extra **Gebruikers** tab to:
+- **Admin**: open Instellingen (⚙) — it's a full-screen panel with a sidebar
+  menu (Cache / Account / Gebruikers). See who's logged in and change your
+  own password on the **Account** tab. Admins get an extra **Gebruikers**
+  tab to:
   - add new accounts (optionally as another admin),
   - reset anyone's password,
   - promote/demote admins,

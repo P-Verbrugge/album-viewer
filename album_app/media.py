@@ -91,7 +91,7 @@ def save_gps_index(index: dict) -> None:
 
 
 def record_gps(rel_path: str, name: str, mtime: int, gps) -> None:
-    with config.gps_index_lock:
+    with config.locked_file(config.GPS_INDEX_LOCK_FILE):
         index = load_gps_index()
         index[rel_path] = {
             "mtime": mtime,

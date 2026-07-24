@@ -612,41 +612,144 @@ main {
   margin: 0 0 1.25rem;
 }
 
-.settings-tabs {
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
-  gap: 0.4rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+  padding: 1.5rem;
 }
 
-.settings-tab {
+.settings-overlay[hidden] {
+  display: none;
+}
+
+.settings-shell {
+  position: relative;
+  width: min(1100px, 100%);
+  height: min(85vh, 800px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+}
+
+.settings-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--bg) 60%, var(--surface));
+  border-right: 1px solid var(--border);
+  padding: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.settings-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.5rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.75rem;
+}
+
+.settings-sidebar-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0 0.75rem;
+}
+
+.settings-nav-item {
+  text-align: left;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: 6px;
   color: var(--text-muted);
   font-family: var(--font-body);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
-  padding: 0.5rem 0.25rem;
+  padding: 0.65rem 0.85rem;
   cursor: pointer;
-  margin-bottom: -1px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.settings-tab:hover {
+.settings-nav-item:hover {
   color: var(--text);
+  background: var(--surface-hover);
 }
 
-.settings-tab.active {
+.settings-nav-item.active {
   color: var(--accent);
-  border-bottom-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-.settings-tab[hidden] {
+.settings-nav-item[hidden] {
   display: none;
+}
+
+.settings-close-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  z-index: 1;
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2.25rem 2.75rem;
 }
 
 .settings-panel[hidden] {
   display: none;
+}
+
+@media (max-width: 720px) {
+  .settings-overlay {
+    padding: 0;
+  }
+
+  .settings-shell {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    flex-direction: column;
+  }
+
+  .settings-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 0;
+    flex-shrink: 0;
+  }
+
+  .settings-sidebar-header {
+    padding: 0 1rem 1rem;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0 1rem;
+  }
+
+  .settings-content {
+    padding: 1.5rem;
+  }
 }
 
 .settings-subheading {
@@ -685,8 +788,9 @@ main {
 .user-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
-  padding: 0.5rem 0.6rem;
+  padding: 0.6rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 0.85rem;
@@ -694,7 +798,8 @@ main {
 
 .user-row .user-name {
   font-weight: 500;
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -709,10 +814,12 @@ main {
   padding: 0.1rem 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  flex-shrink: 0;
 }
 
 .user-row .user-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
   flex-shrink: 0;
 }

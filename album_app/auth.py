@@ -47,9 +47,29 @@ def load_users() -> dict:
         return {}
 
 
+def _save_users_unlocked(users: dict) -> None:
+    config.USERS_FILE.write_text(json.dumps(users))
+
+
 def save_users(users: dict) -> None:
-    with config.users_lock:
-        config.USERS_FILE.write_text(json.dumps(users))
+    """For callers that already hold a consistent snapshot and just want to
+    persist it directly (e.g. migrate_legacy_account, which only ever runs
+    once at startup before any request could be handled)."""
+    with config.locked_file(config.USERS_LOCK_FILE):
+        _save_users_unlocked(users)
+
+
+def _mutate_users(mutator) -> dict:
+    """Runs `mutator(users)` while holding the cross-process file lock for
+    the *entire* read-modify-write cycle — not just the final write — so two
+    concurrent requests (whether same-thread, same-process, or handled by
+    two different gunicorn worker processes) can never silently overwrite
+    each other's change. `mutator` modifies the given dict in place."""
+    with config.locked_file(config.USERS_LOCK_FILE):
+        users = load_users()
+        mutator(users)
+        _save_users_unlocked(users)
+        return users
 
 
 def any_users_exist() -> bool:
@@ -68,32 +88,40 @@ def count_admins(users: dict = None) -> int:
 
 
 def create_user(username: str, password: str, is_admin: bool = False) -> None:
-    users = load_users()
-    users[username] = {"password_hash": generate_password_hash(password), "is_admin": is_admin}
-    save_users(users)
+    password_hash = generate_password_hash(password)
+
+    def mutate(users):
+        users[username] = {"password_hash": password_hash, "is_admin": is_admin}
+
+    _mutate_users(mutate)
 
 
 def delete_user(username: str) -> None:
-    users = load_users()
-    users.pop(username, None)
-    save_users(users)
+    def mutate(users):
+        users.pop(username, None)
+
+    _mutate_users(mutate)
     # Clean up their personal favorites too, since that username no longer exists.
     from .favorites import delete_user_favorites
     delete_user_favorites(username)
 
 
 def set_password(username: str, new_password: str) -> None:
-    users = load_users()
-    if username in users:
-        users[username]["password_hash"] = generate_password_hash(new_password)
-        save_users(users)
+    password_hash = generate_password_hash(new_password)
+
+    def mutate(users):
+        if username in users:
+            users[username]["password_hash"] = password_hash
+
+    _mutate_users(mutate)
 
 
 def set_admin(username: str, is_admin: bool) -> None:
-    users = load_users()
-    if username in users:
-        users[username]["is_admin"] = is_admin
-        save_users(users)
+    def mutate(users):
+        if username in users:
+            users[username]["is_admin"] = is_admin
+
+    _mutate_users(mutate)
 
 
 def current_user():

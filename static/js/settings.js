@@ -157,13 +157,13 @@ function switchTab(name) {
   Object.entries(panels).forEach(([key, panel]) => {
     panel.hidden = key !== name;
   });
-  settingsTabs.querySelectorAll(".settings-tab").forEach((btn) => {
+  settingsTabs.querySelectorAll(".settings-nav-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === name);
   });
 }
 
 settingsTabs.addEventListener("click", (e) => {
-  const btn = e.target.closest(".settings-tab");
+  const btn = e.target.closest(".settings-nav-item");
   if (btn) switchTab(btn.dataset.tab);
 });
 
