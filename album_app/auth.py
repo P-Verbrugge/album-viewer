@@ -1,13 +1,14 @@
 """
-Authentication: a single shared account, created on first visit via /setup,
+Authentication: multiple named accounts (any of which can be an admin),
 backed by a Flask session. Also registers the before_request guard that
-protects every other route in the app.
+protects every other route in the app, and migrates a pre-multi-user
+installation's single account.json into the new users.json store.
 """
 
 import json
 import secrets
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import config
@@ -35,34 +36,120 @@ def get_or_create_secret_key() -> str:
     return key
 
 
-def account_exists() -> bool:
-    return config.ACCOUNT_FILE.exists()
+# --------------------------------------------------------------------------
+# User store: { "username": {"password_hash": ..., "is_admin": bool} }
+# --------------------------------------------------------------------------
 
-
-def load_account():
+def load_users() -> dict:
     try:
-        return json.loads(config.ACCOUNT_FILE.read_text())
+        return json.loads(config.USERS_FILE.read_text())
     except Exception:
+        return {}
+
+
+def save_users(users: dict) -> None:
+    with config.users_lock:
+        config.USERS_FILE.write_text(json.dumps(users))
+
+
+def any_users_exist() -> bool:
+    return len(load_users()) > 0
+
+
+def get_user(username: str):
+    if not username:
         return None
+    return load_users().get(username)
 
 
-def save_account(username: str, password: str) -> None:
-    config.ACCOUNT_FILE.write_text(
-        json.dumps({"username": username, "password_hash": generate_password_hash(password)})
-    )
+def count_admins(users: dict = None) -> int:
+    users = users if users is not None else load_users()
+    return sum(1 for u in users.values() if u.get("is_admin"))
+
+
+def create_user(username: str, password: str, is_admin: bool = False) -> None:
+    users = load_users()
+    users[username] = {"password_hash": generate_password_hash(password), "is_admin": is_admin}
+    save_users(users)
+
+
+def delete_user(username: str) -> None:
+    users = load_users()
+    users.pop(username, None)
+    save_users(users)
+    # Clean up their personal favorites too, since that username no longer exists.
+    from .favorites import delete_user_favorites
+    delete_user_favorites(username)
+
+
+def set_password(username: str, new_password: str) -> None:
+    users = load_users()
+    if username in users:
+        users[username]["password_hash"] = generate_password_hash(new_password)
+        save_users(users)
+
+
+def set_admin(username: str, is_admin: bool) -> None:
+    users = load_users()
+    if username in users:
+        users[username]["is_admin"] = is_admin
+        save_users(users)
+
+
+def current_user():
+    username = session.get("username")
+    user = get_user(username)
+    if user is None:
+        return None
+    return {"username": username, **user}
+
+
+def require_admin():
+    user = current_user()
+    if not user or not user.get("is_admin"):
+        abort(403)
+    return user
+
+
+def migrate_legacy_account() -> None:
+    """Installations from before multi-user support have a single
+    CACHE_DIR/account.json. If no users.json exists yet but that legacy file
+    does, turn it into the first (admin) user instead of forcing a fresh
+    /setup — nobody should lose their existing login over this upgrade."""
+    if config.USERS_FILE.exists():
+        return
+    if not config.ACCOUNT_FILE.exists():
+        return
+    try:
+        legacy = json.loads(config.ACCOUNT_FILE.read_text())
+        username = legacy["username"]
+        password_hash = legacy["password_hash"]
+    except Exception:
+        return
+
+    save_users({username: {"password_hash": password_hash, "is_admin": True}})
+    config.ACCOUNT_FILE.rename(config.ACCOUNT_FILE.with_suffix(".json.migrated"))
 
 
 def require_login():
     """Registered as a before_request hook by create_app(). Redirects to
-    /setup (no account yet) or /login (not signed in) for every route except
-    the public ones above."""
+    /setup (no account yet) or /login (not signed in, or the account behind
+    this session was since deleted) for every route except the public ones
+    above."""
     if request.endpoint in PUBLIC_ENDPOINTS:
         return None
 
-    if not account_exists():
+    if not any_users_exist():
         return redirect(url_for("auth.setup"))
 
     if not session.get("logged_in"):
+        return redirect(url_for("auth.login", next=request.path))
+
+    username = session.get("username")
+    if not username or not get_user(username):
+        # The account behind this session no longer exists (e.g. an admin
+        # deleted it) — end the stale session instead of half-trusting it.
+        session.clear()
         return redirect(url_for("auth.login", next=request.path))
 
     return None
@@ -70,8 +157,8 @@ def require_login():
 
 @bp.route("/setup", methods=["GET", "POST"])
 def setup():
-    # Only usable once: as soon as an account exists, this route just bounces to /login.
-    if account_exists():
+    # Only usable once: as soon as any user exists, this route just bounces to /login.
+    if any_users_exist():
         return redirect(url_for("auth.login"))
 
     error = None
@@ -87,7 +174,8 @@ def setup():
         elif len(password) < 6:
             error = "Wachtwoord moet minstens 6 tekens lang zijn."
         else:
-            save_account(username, password)
+            # The very first account is always the admin.
+            create_user(username, password, is_admin=True)
             session.clear()
             session["logged_in"] = True
             session["username"] = username
@@ -99,18 +187,16 @@ def setup():
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    if not account_exists():
+    if not any_users_exist():
         return redirect(url_for("auth.setup"))
 
     error = None
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        account = load_account()
+        user = get_user(username)
 
-        if account and username == account.get("username") and check_password_hash(
-            account.get("password_hash", ""), password
-        ):
+        if user and check_password_hash(user.get("password_hash", ""), password):
             session.clear()
             session["logged_in"] = True
             session["username"] = username

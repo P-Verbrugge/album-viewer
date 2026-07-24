@@ -92,7 +92,13 @@
       <button class="modal-close" id="settings-close" aria-label="Sluit instellingen">&times;</button>
       <h2 class="modal-title">Instellingen</h2>
 
-      <section class="settings-section">
+      <div class="settings-tabs" id="settings-tabs">
+        <button class="settings-tab active" type="button" data-tab="cache">Cache</button>
+        <button class="settings-tab" type="button" data-tab="account">Account</button>
+        <button class="settings-tab" type="button" data-tab="users" id="users-tab-btn" hidden>Gebruikers</button>
+      </div>
+
+      <section class="settings-section settings-panel" id="panel-cache">
         <h3 class="settings-heading">Thumbnail-cache</h3>
         <p class="settings-desc" id="cache-info-text">Cache-informatie laden...</p>
 
@@ -110,6 +116,48 @@
           eerst bekijkt. Met "Cache nu volledig aanmaken" worden alle foto's in
           één keer alvast verwerkt, zodat bladeren daarna overal meteen snel is.
         </p>
+      </section>
+
+      <section class="settings-section settings-panel" id="panel-account" hidden>
+        <h3 class="settings-heading">Account</h3>
+        <p class="settings-desc" id="account-info-text">Laden...</p>
+
+        <p class="settings-subheading">Wachtwoord wijzigen</p>
+        <div class="auth-error" id="password-change-error" hidden></div>
+        <div class="settings-success" id="password-change-success" hidden>Wachtwoord gewijzigd.</div>
+        <form id="password-change-form" class="auth-form">
+          <label class="auth-label" for="current-password">Huidig wachtwoord</label>
+          <input class="auth-input" type="password" id="current-password" autocomplete="current-password" required />
+
+          <label class="auth-label" for="new-password">Nieuw wachtwoord</label>
+          <input class="auth-input" type="password" id="new-password" autocomplete="new-password" required minlength="6" />
+
+          <label class="auth-label" for="new-password-confirm">Herhaal nieuw wachtwoord</label>
+          <input class="auth-input" type="password" id="new-password-confirm" autocomplete="new-password" required minlength="6" />
+
+          <button class="btn btn-primary auth-submit" type="submit">Wachtwoord wijzigen</button>
+        </form>
+      </section>
+
+      <section class="settings-section settings-panel" id="panel-users" hidden>
+        <h3 class="settings-heading">Gebruikers beheren</h3>
+        <div class="users-list" id="users-list"></div>
+
+        <p class="settings-subheading">Nieuwe gebruiker toevoegen</p>
+        <div class="auth-error" id="add-user-error" hidden></div>
+        <form id="add-user-form" class="auth-form">
+          <label class="auth-label" for="new-username">Gebruikersnaam</label>
+          <input class="auth-input" type="text" id="new-username" required />
+
+          <label class="auth-label" for="new-user-password">Wachtwoord</label>
+          <input class="auth-input" type="password" id="new-user-password" required minlength="6" />
+
+          <label class="checkbox-label">
+            <input type="checkbox" id="new-user-admin" /> Beheerder
+          </label>
+
+          <button class="btn btn-primary auth-submit" type="submit">Gebruiker toevoegen</button>
+        </form>
       </section>
     </div>
   </div>
