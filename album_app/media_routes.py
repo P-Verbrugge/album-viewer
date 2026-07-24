@@ -8,12 +8,15 @@ from flask import Blueprint, abort, request, send_file
 from . import config
 from .media import (
     HeicNotSupported,
+    RawNotSupported,
     ensure_thumbnail,
     is_image,
     is_media,
+    is_raw,
     is_video,
     safe_resolve,
     serve_as_jpeg_path,
+    serve_raw_as_jpeg_path,
 )
 
 bp = Blueprint("media_routes", __name__)
@@ -51,6 +54,15 @@ def full_image():
             abort(415, "HEIC wordt niet ondersteund — herbouw de container met pillow-heif")
         except Exception:
             abort(415, "Kan dit HEIC-bestand niet converteren")
+        return send_file(cache_file, mimetype="image/jpeg")
+
+    if is_raw(abs_path):
+        try:
+            cache_file = serve_raw_as_jpeg_path(abs_path)
+        except RawNotSupported:
+            abort(415, "RAW-bestanden worden niet ondersteund — herbouw de container met rawpy")
+        except Exception:
+            abort(415, "Kan dit RAW-bestand niet converteren")
         return send_file(cache_file, mimetype="image/jpeg")
 
     return send_file(abs_path)

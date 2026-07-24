@@ -57,7 +57,8 @@ def locked_file(lock_path: Path):
     finally:
         os.close(fd)
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".heif"}
+RAW_EXTS = {".cr2", ".cr3", ".nef", ".nrw", ".arw", ".rw2", ".orf", ".raf", ".pef", ".srw", ".dng"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".heif"} | RAW_EXTS
 HEIF_EXTS = {".heic", ".heif"}  # no browser can display these formats directly
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".avi", ".webm"}
 VIDEO_MIME_TYPES = {
@@ -72,6 +73,25 @@ DEFAULT_PAGE_SIZE = 300
 MAX_PAGE_SIZE = 1000
 MAX_ZIP_FILES = 3000  # sanity limit so one request can't hang the server for hours
 
+# Login rate-limiting: after MAX_LOGIN_ATTEMPTS failures for a given username
+# within LOGIN_ATTEMPT_WINDOW_SECONDS, that username is locked out for
+# LOGIN_LOCKOUT_SECONDS. Tracked per-username (not per-IP), which is the
+# relevant threat model for a small home app: slowing down someone guessing
+# a specific person's password.
+LOGIN_ATTEMPTS_FILE = CACHE_DIR / "login_attempts.json"
+LOGIN_ATTEMPTS_LOCK_FILE = CACHE_DIR / "login_attempts.json.lock"
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_ATTEMPT_WINDOW_SECONDS = 5 * 60
+LOGIN_LOCKOUT_SECONDS = 5 * 60
+
+# File-triggered password reset: since this self-hosted app has no email
+# server to send a reset link to, "proof of legitimate access" instead means
+# creating this file via `docker exec` — something only someone who can
+# already reach the server's shell can do. It's a one-time trigger that also
+# expires on its own if nobody uses it.
+RESET_TRIGGER_FILE = CACHE_DIR / "allow_password_reset"
+RESET_TRIGGER_MAX_AGE_SECONDS = 10 * 60
+
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 try:
@@ -83,3 +103,10 @@ except ImportError:
     # or no wheel is available for this platform. HEIC files are simply skipped
     # instead of crashing the app.
     HEIC_SUPPORTED = False
+
+try:
+    import rawpy  # noqa: F401
+    RAW_SUPPORTED = True
+except ImportError:
+    # Same idea as HEIC_SUPPORTED above, but for camera RAW formats.
+    RAW_SUPPORTED = False

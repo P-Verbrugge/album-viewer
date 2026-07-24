@@ -1107,6 +1107,35 @@ main {
   margin: 0 0 1.25rem;
 }
 
+.auth-sub a {
+  color: var(--accent);
+}
+
+.reset-command {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0 0 1.25rem;
+}
+
+.reset-reload-btn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+.reset-back-link {
+  text-align: center;
+  margin: 1.25rem 0 0;
+}
+
 .auth-error {
   background: color-mix(in srgb, #ff5d5d 15%, transparent);
   border: 1px solid color-mix(in srgb, #ff5d5d 40%, transparent);

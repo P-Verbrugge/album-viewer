@@ -129,3 +129,48 @@ lbInfoBtn.addEventListener("click", () => {
     infoPanel.hidden = true;
   }
 });
+
+// ---------------- Swipe gestures (touch) ----------------
+// Swipe left/right to go to the next/previous photo, swipe down to close —
+// the same gestures people already expect from a phone's own gallery app.
+
+let touchStartX = 0;
+let touchStartY = 0;
+let touchActive = false;
+
+const SWIPE_MIN_DISTANCE = 50; // px, how far a swipe needs to travel to count
+const SWIPE_MAX_OFF_AXIS = 80; // px, how much sideways drift is still tolerated
+
+lightbox.addEventListener(
+  "touchstart",
+  (e) => {
+    if (e.touches.length !== 1) return;
+    // Don't hijack touches on the video's own native controls (scrubbing etc.)
+    if (e.target === lbVideo && lbVideo.controls) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchActive = true;
+  },
+  { passive: true }
+);
+
+lightbox.addEventListener(
+  "touchend",
+  (e) => {
+    if (!touchActive) return;
+    touchActive = false;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+
+    const deltaX = touch.clientX - touchStartX;
+    const deltaY = touch.clientY - touchStartY;
+
+    if (Math.abs(deltaX) > SWIPE_MIN_DISTANCE && Math.abs(deltaY) < SWIPE_MAX_OFF_AXIS) {
+      if (deltaX < 0) showNext();
+      else showPrev();
+    } else if (deltaY > SWIPE_MIN_DISTANCE && Math.abs(deltaX) < SWIPE_MAX_OFF_AXIS) {
+      closeLightbox();
+    }
+  },
+  { passive: true }
+);

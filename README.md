@@ -34,6 +34,39 @@ Via environment variables (see `docker-compose.yml`):
 Photos are mounted **read-only** (`:ro`), so the app can never modify or
 delete anything on your disk.
 
+## Data & backups
+
+Everything the app stores itself — accounts (`users.json`), favorites,
+thumbnail cache, and the GPS index — lives under `CACHE_DIR` (`/cache`
+inside the container). `docker-compose.yml` maps this to a plain folder on
+your host (a bind mount), not a Docker-managed named volume:
+
+```yaml
+- /path/to/your/album-viewer-data:/cache
+```
+
+This means that folder is just regular files on your NAS — visible in your
+file browser, easy to include in your normal backup routine, and completely
+unaffected by rebuilding or recreating the container (only `docker compose
+down -v` on a *named volume* setup would ever wipe that; a bind-mounted
+folder is never touched by Docker itself).
+
+**Upgrading from an older setup that used a named volume?** Your existing
+data isn't gone — it's just sitting in Docker's own storage area instead of
+a folder you can see. To move it into a visible folder:
+
+```bash
+# 1. Find where Docker actually stored it (name may vary slightly):
+docker volume inspect photo-album-app_album-viewer-cache
+
+# 2. Copy that folder's contents to wherever you want it visible, e.g.:
+sudo cp -a <Mountpoint-from-above>/. /mnt/YourPool/apps/photo-album-app/data/
+
+# 3. Update docker-compose.yml's volumes: line to point at that new folder,
+#    then recreate the container:
+docker compose up -d
+```
+
 ## How a folder is displayed
 
 For every folder, in this order:
@@ -67,9 +100,10 @@ are kept regardless.
   competing for attention.
 - **Favorites**: click the heart on a photo tile or in the viewer. Favorites
   are personal to your account (stored server-side in
-  `CACHE_DIR/favorites.json`, so they persist in the `album-viewer-cache`
-  volume) — nobody else sees what you've favorited. Click the heart icon top
-  right in the toolbar for an overview of your favorites.
+  `CACHE_DIR/favorites.json`, so they persist in your data folder — see
+  [Data & backups](#data--backups)) — nobody else sees what you've
+  favorited. Click the heart icon top right in the toolbar for an overview
+  of your favorites.
 - **EXIF info**: click the ⓘ icon in the photo viewer for camera, lens,
   shutter speed, aperture, ISO, focal length, and date taken (as far as
   present in the file). If the photo has a GPS location, a small map (via
@@ -118,8 +152,9 @@ logging in. Multiple people can each have their own account.
 - **Favorites are personal**: each account has its own favorites list —
   nobody sees anyone else's.
 - **Passwords** are stored locally, always hashed (never in plain text), in
-  `CACHE_DIR/users.json` — so in the `album-viewer-cache` volume, and this
-  survives a container restart.
+  `CACHE_DIR/users.json` — so in your data folder (see
+  [Data & backups](#data--backups)), and this survives a container restart
+  or rebuild.
 - **Locked out entirely** (e.g. forgot the only admin's password and there's
   no other admin to reset it)? Delete the whole user store to start over
   with a fresh "Create account" screen:
@@ -135,7 +170,7 @@ logging in. Multiple people can each have their own account.
 ### Why gunicorn runs with `--preload`
 
 The Dockerfile starts gunicorn with `--preload`. This matters specifically
-for the very first startup on a brand-new, empty cache volume: the app
+for the very first startup on a brand-new, empty data folder: the app
 generates a random session-signing key and saves it to
 `CACHE_DIR/secret_key.txt` the first time it's needed. Without `--preload`,
 each of gunicorn's worker processes would generate that key independently
@@ -145,6 +180,25 @@ sometimes not" behavior depending on which worker handled a given request.
 With `--preload`, the app (and that key) is created once, before gunicorn
 forks its workers, so every worker shares the exact same key. This was
 verified directly against real gunicorn with multiple worker processes.
+
+## Account security
+
+- **Rate-limiting**: after 5 failed login attempts for a given username
+  within 5 minutes, that username is locked out for 5 minutes (even with the
+  correct password) — this slows down someone trying to guess a password.
+  Tracked per-username, so a typo on one account never locks out anyone
+  else.
+- **Forgot your password?** Since this is a self-hosted app with no email
+  server, there's no "reset link" — instead, click "Wachtwoord vergeten?" on
+  the login page. It'll ask you to prove you have real access to the
+  server by running:
+  ```bash
+  docker exec -it album-viewer touch /cache/allow_password_reset
+  ```
+  Reload the page afterwards and you'll get a real reset form (username +
+  new password). This "permission slip" is one-time-use and expires after
+  10 minutes on its own, so it can't be left lying around as a standing way
+  in.
 
 ## Video clips
 
@@ -168,6 +222,48 @@ badge on the tile tells them apart from photos.
 - Running without Docker? Make sure `ffmpeg` is installed on your system
   (`apt install ffmpeg` / `brew install ffmpeg`) — the Docker image already
   includes it.
+
+## RAW photos
+
+Camera RAW files (`.cr2 .cr3 .nef .nrw .arw .rw2 .orf .raf .pef .srw .dng`)
+show up alongside your regular photos — same grid, favorites, downloads,
+everything.
+
+- **Thumbnails and the full-size view** use the JPEG preview your camera
+  already embedded in the RAW file (every camera does this) rather than
+  fully decoding the raw sensor data — much faster, and it's the same image
+  most photo apps show you anyway. Verified directly against real Canon CR2
+  and Nikon NEF files.
+- If a RAW file has no embedded preview (rare), it falls back to a full
+  demosaic at half resolution, trading a bit of detail for speed on modest
+  NAS hardware.
+- **Downloads** always give you the true, untouched original RAW file —
+  the JPEG conversion is only ever for on-screen viewing.
+- Powered by `rawpy` (bundles its own decoder, no extra system packages
+  needed — unlike `ffmpeg`, this one just works via `pip install`).
+
+## Mobile use
+
+- **Swipe gestures** in the viewer: swipe left/right for the next/previous
+  photo, swipe down to close — the same gestures your phone's own gallery
+  app already uses.
+- **Install as an app**: open the album viewer in your phone's browser and
+  use "Add to Home Screen" (iOS Safari) or the browser's install/shortcut
+  option (Android Chrome) to get a proper icon and a full-screen,
+  address-bar-free window.
+
+  One honest caveat: this app is designed to stay on your local network
+  without HTTPS, and browsers restrict some PWA features to "secure
+  contexts" (HTTPS, or literally `localhost`). Practical effect:
+  - **iOS Safari**: "Add to Home Screen" works fully over plain HTTP on
+    your LAN — no caveats.
+  - **Android Chrome**: the automatic one-tap "Install app" banner won't
+    appear over plain HTTP. You can still get a home-screen icon manually
+    via the browser's menu → "Add to Home screen" / "Install app", which
+    still uses the app's name/icon — just without the fancier automatic
+    prompt. If you ever put this behind a reverse proxy with HTTPS, the
+    full experience (including offline shell caching) kicks in
+    automatically, no code changes needed.
 
 ## Downloading
 
@@ -258,6 +354,7 @@ Docker fetches the latest commit on the `main` branch on every build — a
 ## Supported formats
 
 Photos: `.jpg .jpeg .png .gif .webp .bmp .tiff .heic .heif`
+RAW: `.cr2 .cr3 .nef .nrw .arw .rw2 .orf .raf .pef .srw .dng`
 Videos: `.mp4 .mov .m4v .avi .webm`
 
 HEIC/HEIF (the format iPhones use) is supported via the `pillow-heif`
@@ -276,6 +373,7 @@ photo-album-app/
 │   ├── exif_utils.py      # pure EXIF-parsing helpers
 │   ├── media.py           # path safety, file-type checks, thumbnails, GPS index
 │   ├── auth.py            # multi-user store, /setup, /login, /logout, login guard
+│   ├── login_security.py  # rate-limiting + file-triggered password reset
 │   ├── account_routes.py  # /api/account/me, /api/account/password (self-service)
 │   ├── admin_users.py     # /api/admin/users/* (admin-only user management)
 │   ├── pages.py           # "/" — the single-page-app shell
@@ -286,9 +384,12 @@ photo-album-app/
 │   ├── gps_map.py         # /api/map/photos
 │   ├── downloads.py       # /api/download/photo, /api/download/zip
 │   └── cache_job.py       # bulk-cache background job + /api/cache/*
-├── templates/              # index.html, login.html, setup.html
+├── templates/              # index.html, login.html, setup.html, reset_password.html
 └── static/
     ├── style.css
+    ├── manifest.json       # PWA manifest
+    ├── sw.js               # minimal service worker (static assets only)
+    ├── icons/              # PWA icons (192/512/maskable/apple-touch-icon)
     └── js/                 # ES modules — see static/js/main.js for the module map
 ```
 

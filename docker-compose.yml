@@ -19,13 +19,14 @@ services:
     volumes:
       # Change the left-hand path to the folder with your photos on the host.
       - /path/to/your/photos:/photos:ro
-      # The thumbnail cache persists across restarts.
-      - album-viewer-cache:/cache
+      # All app data (accounts, favorites, thumbnail cache, GPS index) lives
+      # in a plain folder on your host — not a Docker-managed volume — so
+      # it's easy to see, back up, and it's completely unaffected by
+      # rebuilding or recreating the container. Change the left-hand path to
+      # wherever you want this to live, e.g. on the same pool as your app.
+      - /path/to/your/album-viewer-data:/cache
     environment:
       - PHOTOS_ROOT=/photos
       - CACHE_DIR=/cache
       - THUMB_SIZE=400
     restart: unless-stopped
-
-volumes:
-  album-viewer-cache:

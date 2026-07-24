@@ -12,11 +12,18 @@ from flask import Blueprint, abort, redirect, render_template, request, session,
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import config
+from .login_security import (
+    clear_attempts,
+    consume_reset_trigger,
+    register_failed_attempt,
+    reset_trigger_active,
+    seconds_until_unlocked,
+)
 
 bp = Blueprint("auth", __name__)
 
 # Endpoints reachable without being logged in (auth pages + static assets).
-PUBLIC_ENDPOINTS = {"auth.setup", "auth.login", "static"}
+PUBLIC_ENDPOINTS = {"auth.setup", "auth.login", "auth.reset_password_page", "static"}
 
 
 def get_or_create_secret_key() -> str:
@@ -222,17 +229,25 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        user = get_user(username)
 
-        if user and check_password_hash(user.get("password_hash", ""), password):
-            session.clear()
-            session["logged_in"] = True
-            session["username"] = username
-            session.permanent = True
-            next_path = request.args.get("next")
-            return redirect(next_path if next_path else url_for("pages.index"))
+        wait = seconds_until_unlocked(username)
+        if wait > 0:
+            minutes = max(1, (wait + 59) // 60)
+            unit = "minuut" if minutes == 1 else "minuten"
+            error = f"Te veel mislukte inlogpogingen. Probeer het over ongeveer {minutes} {unit} opnieuw."
+        else:
+            user = get_user(username)
+            if user and check_password_hash(user.get("password_hash", ""), password):
+                clear_attempts(username)
+                session.clear()
+                session["logged_in"] = True
+                session["username"] = username
+                session.permanent = True
+                next_path = request.args.get("next")
+                return redirect(next_path if next_path else url_for("pages.index"))
 
-        error = "Onjuiste gebruikersnaam of wachtwoord."
+            register_failed_attempt(username)
+            error = "Onjuiste gebruikersnaam of wachtwoord."
 
     return render_template("login.html", error=error)
 
@@ -241,3 +256,35 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/reset-password", methods=["GET", "POST"])
+def reset_password_page():
+    trigger_active = reset_trigger_active()
+    error = None
+    success = False
+
+    if request.method == "POST":
+        if not trigger_active:
+            error = "Reset is niet (meer) vrijgegeven. Zie de instructies hieronder."
+        else:
+            username = request.form.get("username", "").strip()
+            new_password = request.form.get("new_password", "")
+            new_password_confirm = request.form.get("new_password_confirm", "")
+
+            if not get_user(username):
+                error = "Onbekende gebruikersnaam."
+            elif new_password != new_password_confirm:
+                error = "Wachtwoorden komen niet overeen."
+            elif len(new_password) < 6:
+                error = "Wachtwoord moet minstens 6 tekens lang zijn."
+            else:
+                set_password(username, new_password)
+                clear_attempts(username)
+                consume_reset_trigger()
+                success = True
+                trigger_active = False
+
+    return render_template(
+        "reset_password.html", trigger_active=trigger_active, error=error, success=success
+    )
