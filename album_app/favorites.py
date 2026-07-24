@@ -15,9 +15,30 @@ bp = Blueprint("favorites", __name__)
 
 def _load_all() -> dict:
     try:
-        return json.loads(config.FAVORITES_FILE.read_text())
+        data = json.loads(config.FAVORITES_FILE.read_text())
     except Exception:
         return {}
+
+    if isinstance(data, dict):
+        return data
+
+    if isinstance(data, list):
+        # Pre-multi-user installations stored favorites as one flat, shared
+        # list. Rather than crash on the format mismatch (or silently lose
+        # them), migrate them once to the first admin account, and persist
+        # that so this only ever happens a single time.
+        from .auth import load_users
+
+        users = load_users()
+        admin_username = next(
+            (username for username, info in sorted(users.items()) if info.get("is_admin")),
+            None,
+        )
+        migrated = {admin_username: data} if admin_username else {}
+        _save_all(migrated)
+        return migrated
+
+    return {}
 
 
 def _save_all(all_favs: dict) -> None:
